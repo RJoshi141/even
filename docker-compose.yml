@@ -1,0 +1,19 @@
+services:
+  db:
+    build: ./db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-even}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-even}
+      POSTGRES_DB: ${POSTGRES_DB:-even}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-even}"]
+      interval: 5s
+      retries: 10
+
+volumes:
+  pgdata:
