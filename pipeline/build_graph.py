@@ -157,8 +157,8 @@ def summary(cur):
         SELECT node FROM cc WHERE component = (
             SELECT component FROM cc GROUP BY 1 ORDER BY count(*) DESC LIMIT 1)
     """)
-    cur.execute("SELECT count(*) FROM main_nodes")
-    main = cur.fetchone()[0]
+    cur.execute("UPDATE nodes SET in_main = true FROM main_nodes m WHERE nodes.id = m.node")
+    main = cur.rowcount
     print(f"Connected pieces: {n_comp}. Largest holds {main / n_nodes:.0%} of nodes")
     return main
 
@@ -166,7 +166,7 @@ def summary(cur):
 def nearest_node(cur, lat, lon):
     # only snap to the main connected network, an island node would make routing fail
     cur.execute("""
-        SELECT n.id FROM nodes n JOIN main_nodes m ON m.node = n.id
+        SELECT n.id FROM nodes n WHERE n.in_main
         ORDER BY n.geom <-> ST_SetSRID(ST_MakePoint(%s, %s), 4326) LIMIT 1
     """, (lon, lat))
     return cur.fetchone()[0]
@@ -224,6 +224,7 @@ def main():
         conn.commit()
 
         summary(cur)
+        conn.commit()  # keep the in_main flags for the API
         demo_routes(cur)
 
 

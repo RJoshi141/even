@@ -5,8 +5,9 @@ DROP TABLE IF EXISTS nodes;
 
 CREATE TABLE nodes (
     id    bigint PRIMARY KEY,
-    elev  real,
-    geom  geometry(Point, 4326) NOT NULL
+    elev     real,
+    in_main  boolean NOT NULL DEFAULT false,   -- part of the largest connected network
+    geom     geometry(Point, 4326) NOT NULL
 );
 CREATE INDEX nodes_geom_idx ON nodes USING gist (geom);
 
