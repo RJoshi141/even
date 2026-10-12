@@ -13,6 +13,7 @@ URL = "https://data.sfgov.org/resource/ch9w-7kih.json"
 DATA_DIR = Path(__file__).parent / "data"
 FIELDS = [
     "locid", "cnn", "locationdescription", "latitude", "longitude",
+    "curbreturnloc", "positiononreturn",
     "crexist", "conditionscore", "sloperangeid", "liptoohigh",
 ]
 PAGE = 20_000

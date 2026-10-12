@@ -3,6 +3,10 @@
 Combines DataSF's ramp inventory with OSM kerb tags. DataSF wins when it has
 a definite answer (it's a city survey, updated yearly); OSM fills the gaps.
 
+DataSF stores every ramp at its intersection's center point and labels the
+corner (NE, SW...). So we find the intersection nearest each crosswalk end,
+then pick the corner whose compass direction matches the end's bearing.
+
 Usage: uv run match_curbs.py [area]   (default: sf-core)
 """
 import json
@@ -17,8 +21,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(__file__).parent / "data"
 SCHEMA = ROOT / "db" / "schema" / "003_curbs.sql"
 
-RAMP_RADIUS_M = 10   # DataSF points sit on the corner, OSM crossings end at the curb
-KERB_RADIUS_M = 4    # OSM kerb nodes are usually on or right next to the crossing end
+INTERSECTION_RADIUS_M = 35  # crosswalk ends sit 10-30 m from the center on wide streets; blocks are 80 m+
+MAX_CORNER_ANGLE = 67.5     # end's bearing must roughly point at the labeled corner
+KERB_RADIUS_M = 4      # OSM kerb nodes are usually on or right next to the crossing end
 
 
 def to_int(v):
@@ -40,30 +45,57 @@ def ramp_rows(raw, bounds):
         lip = to_int(r.get("liptoohigh"))
         yield (
             r["locid"], to_int(r.get("cnn")), r.get("locationdescription"),
+            (r.get("curbreturnloc") or "").strip().upper() or None, r.get("positiononreturn"),
             to_int(r.get("crexist")) == 1, to_int(r.get("conditionscore")),
             to_int(r.get("sloperangeid")), None if lip is None else lip == 1,
             f"POINT({lon} {lat})",
         )
 
 
+# one row per labeled corner of each intersection, summarizing its ramps
+CORNERS_SQL = """
+CREATE TEMP TABLE corners AS
+SELECT cnn, corner,
+    ST_Centroid(ST_Collect(geom)) AS center,
+    CASE corner WHEN 'N' THEN 0 WHEN 'NE' THEN 45 WHEN 'E' THEN 90 WHEN 'SE' THEN 135
+                WHEN 'S' THEN 180 WHEN 'SW' THEN 225 WHEN 'W' THEN 270 WHEN 'NW' THEN 315 END AS bearing,
+    bool_and(cr_exist) AS all_exist,
+    bool_or(cr_exist) AS any_exist,
+    bool_or(condition_score = 0) AS any_missing,
+    min(condition_score) FILTER (WHERE cr_exist) AS worst_condition,
+    max(slope_range) FILTER (WHERE cr_exist AND slope_range < 5) AS steepest_range
+FROM curb_ramps
+WHERE cnn IS NOT NULL AND corner IN ('N','NE','E','SE','S','SW','W','NW')
+GROUP BY cnn, corner;
+CREATE INDEX ON corners (cnn);
+"""
+
 MATCH_SQL = f"""
-INSERT INTO crossing_ends (crossing_id, which, status, source, osm_kerb,
-                           ramp_id, ramp_dist_m, ramp_condition, ramp_slope_range, geom)
+INSERT INTO crossing_ends (crossing_id, which, status, source, osm_kerb, cnn, corner,
+                           datasf_corner, corner_angle, ramp_condition, ramp_slope_range, geom)
 SELECT e.osm_id, e.which,
     CASE
-        WHEN r.cr_exist THEN 'ramp'
-        WHEN r.condition_score = 0 THEN 'barrier'      -- city says a ramp is needed and missing
+        WHEN r.all_exist THEN 'ramp'
+        WHEN NOT r.any_exist AND r.any_missing THEN 'barrier'   -- city says needed and missing
         WHEN k.kerb = 'lowered' THEN 'ramp'
         WHEN k.kerb IN ('flush', 'no') THEN 'flush'
         WHEN k.kerb = 'raised' THEN 'barrier'
-        ELSE 'unknown'                                 -- includes kerb=yes, rolled, no data
+        ELSE 'unknown'                                          -- mixed corners, kerb=yes, no data
     END,
     CASE
-        WHEN r.cr_exist OR r.condition_score = 0 THEN 'datasf'
+        WHEN r.all_exist OR (NOT r.any_exist AND r.any_missing) THEN 'datasf'
         WHEN k.kerb IN ('lowered', 'flush', 'no', 'raised') THEN 'osm'
         ELSE 'none'
     END,
-    k.kerb, r.id, r.dist, r.condition_score, r.slope_range, e.pt
+    k.kerb, r.cnn, r.corner,
+    CASE
+        WHEN r.cnn IS NULL THEN NULL
+        WHEN r.all_exist THEN 'ramp'
+        WHEN NOT r.any_exist AND r.any_missing THEN 'missing'
+        WHEN r.any_exist THEN 'mixed'
+        ELSE 'none'                                             -- not needed / not possible
+    END,
+    r.angle, r.worst_condition, r.steepest_range, e.pt
 FROM (
     SELECT osm_id, 'start' AS which, ST_StartPoint(geom) AS pt FROM osm_ways WHERE kind = 'crossing'
     UNION ALL
@@ -76,11 +108,20 @@ LEFT JOIN LATERAL (
     ORDER BY p.geom <-> e.pt LIMIT 1
 ) k ON true
 LEFT JOIN LATERAL (
-    SELECT c.id, c.cr_exist, c.condition_score, c.slope_range,
-           ST_Distance(c.geom::geography, e.pt::geography) AS dist
-    FROM curb_ramps c
-    WHERE ST_DWithin(c.geom::geography, e.pt::geography, {RAMP_RADIUS_M})
-    ORDER BY c.geom <-> e.pt LIMIT 1
+    -- the corner of the nearest intersection that this end points toward
+    SELECT c.*, a.angle
+    FROM (
+        SELECT cr.cnn FROM curb_ramps cr
+        WHERE ST_DWithin(cr.geom::geography, e.pt::geography, {INTERSECTION_RADIUS_M})
+        ORDER BY cr.geom <-> e.pt LIMIT 1
+    ) x
+    JOIN corners c ON c.cnn = x.cnn
+    CROSS JOIN LATERAL (
+        SELECT degrees(acos(least(1, greatest(-1,
+            cos(radians(c.bearing) - ST_Azimuth(c.center::geography, e.pt::geography)))))) AS angle
+    ) a
+    WHERE a.angle < {MAX_CORNER_ANGLE}
+    ORDER BY a.angle LIMIT 1
 ) r ON true
 """
 
@@ -108,6 +149,9 @@ def summary(cur):
            OR (source = 'datasf' AND status = 'barrier' AND osm_kerb IN ('lowered','flush','no'))
     """)
     print(f"OSM and DataSF disagree: {cur.fetchone()[0]}")
+
+    cur.execute("SELECT datasf_corner, count(*) FROM crossing_ends WHERE cnn IS NOT NULL GROUP BY 1 ORDER BY 2 DESC")
+    print("Matched to a city corner: " + ", ".join(f"{c} {n}" for c, n in cur.fetchall()))
 
     cur.execute("""
         SELECT count(*) FILTER (WHERE ramp_slope_range IN (3, 4)),
@@ -150,7 +194,6 @@ def main():
             sys.exit("No crossings loaded, run load_osm.py first")
 
         cur.execute(SCHEMA.read_text())
-        cur.execute("TRUNCATE curb_ramps, crossing_ends RESTART IDENTITY")
 
         # pad the area a little so corners on the edge still find their ramps
         cur.execute("""
@@ -159,12 +202,14 @@ def main():
         """)
         rows = list(ramp_rows(json.loads(src.read_text()), cur.fetchone()))
         cur.executemany(
-            "INSERT INTO curb_ramps (locid, cnn, location, cr_exist, condition_score, slope_range, lip_too_high, geom) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326))",
+            "INSERT INTO curb_ramps (locid, cnn, location, corner, position, cr_exist, condition_score, "
+            "slope_range, lip_too_high, geom) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, ST_GeomFromText(%s, 4326))",
             rows,
         )
         print(f"Loaded {len(rows)} curb ramps in the area")
 
+        cur.execute(CORNERS_SQL)
         cur.execute(MATCH_SQL)
         conn.commit()
         summary(cur)
