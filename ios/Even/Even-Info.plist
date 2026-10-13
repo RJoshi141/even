@@ -2,7 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- lets the app call the dev API over plain http on localhost / the LAN, nothing else -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Even uses your location as the starting point for routes.</string>
+	<!-- lets the app call the dev API over plain http on localhost / the LAN -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

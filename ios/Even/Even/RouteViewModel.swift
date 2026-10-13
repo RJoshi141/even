@@ -11,7 +11,7 @@ final class RouteViewModel {
 
     var state: State = .loading
     var origin = Places.civicCenter
-    var destination = Places.destinations[0]
+    var destination = Places.suggestions[1]
     var preset: Preset = .manualWheelchair
     var selected: RouteKind = .fitsProfile
 
@@ -19,6 +19,10 @@ final class RouteViewModel {
 
     // changes whenever the request does, so views can reload and reset the map
     var requestKey: String { "\(origin.id)|\(destination.id)|\(preset.rawValue)" }
+
+    func swap() {
+        (origin, destination) = (destination, origin)
+    }
 
     func load() async {
         state = .loading

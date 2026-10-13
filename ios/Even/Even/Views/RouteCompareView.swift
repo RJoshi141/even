@@ -2,6 +2,12 @@ import SwiftUI
 
 struct RouteCompareView: View {
     @State private var model = RouteViewModel()
+    @State private var editing: Field?
+
+    enum Field: String, Identifiable {
+        case origin, destination
+        var id: String { rawValue }
+    }
 
     var body: some View {
         NavigationStack {
@@ -12,51 +18,43 @@ struct RouteCompareView: View {
             .navigationTitle("Route options")
             .navigationBarTitleDisplayMode(.inline)
         }
-        // reloads whenever destination or profile changes
+        // reloads whenever origin, destination or profile changes
         .task(id: model.requestKey) { await model.load() }
+        .sheet(item: $editing) { field in
+            PlaceSearchView(title: field == .origin ? "From" : "To",
+                            allowsCurrentLocation: field == .origin) { place in
+                if field == .origin { model.origin = place } else { model.destination = place }
+            }
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             // from / to, like a maps app
-            VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Image(systemName: "circle")
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
-                    Text(model.origin.name)
-                    Spacer()
-                }
-                .padding(12)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("From \(model.origin.name)")
-
-                Divider().padding(.leading, 44)
-
-                Menu {
-                    Picker("Destination", selection: $model.destination) {
-                        ForEach(Places.destinations) { Text($0.name).tag($0) }
+            HStack(spacing: 8) {
+                VStack(spacing: 0) {
+                    placeRow(icon: "circle", tint: .secondary, place: model.origin, bold: false) {
+                        editing = .origin
                     }
+                    .accessibilityLabel("From \(model.origin.name)")
+
+                    Divider().padding(.leading, 44)
+
+                    placeRow(icon: "mappin.circle.fill", tint: Color.evenTeal, place: model.destination, bold: true) {
+                        editing = .destination
+                    }
+                    .accessibilityLabel("To \(model.destination.name)")
+                }
+                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+
+                Button {
+                    model.swap()
                 } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "mappin.circle.fill")
-                            .foregroundStyle(Color.evenTeal)
-                            .frame(width: 20)
-                        Text(model.destination.name)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(12)
-                    .contentShape(Rectangle())
+                    Image(systemName: "arrow.up.arrow.down")
+                        .frame(width: 44, height: 44)
                 }
-                .accessibilityLabel("To \(model.destination.name)")
-                .accessibilityHint("Choose a destination")
+                .accessibilityLabel("Swap start and destination")
             }
-            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
 
             // mobility profile as a chip, limits shown once the server confirms them
             Menu {
@@ -80,6 +78,26 @@ struct RouteCompareView: View {
         }
         .padding(.horizontal)
         .padding(.bottom, 10)
+    }
+
+    private func placeRow(icon: String, tint: Color, place: Place, bold: Bool,
+                          action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .foregroundStyle(tint)
+                    .frame(width: 20)
+                Text(place.name)
+                    .fontWeight(bold ? .semibold : .regular)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer()
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Search for a place")
     }
 
     private var profileText: String {

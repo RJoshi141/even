@@ -60,11 +60,12 @@ ORDER BY gap LIMIT 1
 """
 
 
-def snap(cur, pt: Point):
+def snap(cur, pt: Point, which: str):
     cur.execute(SNAP_SQL, {"lon": pt.lon, "lat": pt.lat})
     row = cur.fetchone()
     if row is None or row[1] > MAX_SNAP_M:
-        raise OutsideCoverage(f"({pt.lat}, {pt.lon}) is outside the area Even covers yet")
+        raise OutsideCoverage(f"Your {which} is outside the area Even covers so far: "
+                              "Downtown, SoMa and the Mission in San Francisco.")
     return row
 
 
@@ -133,8 +134,8 @@ def summarize(rows, p: Profile) -> tuple[RouteSummary, list[str]]:
 
 def plan(conn, origin: Point, destination: Point, p: Profile) -> dict:
     with conn.cursor() as cur:
-        src, src_d = snap(cur, origin)
-        dst, dst_d = snap(cur, destination)
+        src, src_d = snap(cur, origin, "starting point")
+        dst, dst_d = snap(cur, destination, "destination")
         sql = profile_sql(p)
 
         rows, reaches, gap = path(cur, sql, src, dst), True, None
