@@ -86,10 +86,10 @@ struct PlaceSearchView: View {
             let response = try await MKLocalSearch(request: request).start()
             guard !Task.isCancelled else { return }
             results = response.mapItems.map { item in
-                let c = item.placemark.coordinate
+                let c = item.location.coordinate
                 return Place(name: item.name ?? q,
                              point: GeoPoint(lat: c.latitude, lon: c.longitude),
-                             subtitle: item.placemark.title)
+                             subtitle: item.address?.shortAddress ?? item.address?.fullAddress)
             }
         } catch {
             results = []

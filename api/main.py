@@ -9,7 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from psycopg_pool import ConnectionPool
 
 import routing
-from models import PRESETS, Profile, RouteRequest, RouteResponse
+from models import (PRESETS, InspectResponse, NetworkResponse, Point, PresetName, Profile,
+                    RouteRequest, RouteResponse)
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 pool: ConnectionPool | None = None
@@ -47,3 +48,18 @@ def route(req: RouteRequest):
             return routing.plan(conn, req.origin, req.destination, profile)
     except routing.OutsideCoverage as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+@app.get("/inspect", response_model=InspectResponse)
+def inspect(lat: float, lon: float, preset: PresetName = "manual_wheelchair"):
+    """The path nearest a tapped spot, judged for the given profile."""
+    with pool.connection() as conn:
+        return routing.inspect(conn, Point(lat=lat, lon=lon), PRESETS[preset])
+
+
+@app.get("/network", response_model=NetworkResponse)
+def network(min_lat: float, min_lon: float, max_lat: float, max_lon: float,
+            preset: PresetName = "manual_wheelchair"):
+    """Every path in a map view, classed by steepness for the given profile."""
+    with pool.connection() as conn:
+        return routing.network(conn, min_lon, min_lat, max_lon, max_lat, PRESETS[preset])

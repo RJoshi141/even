@@ -47,6 +47,7 @@ class Segment(BaseModel):
     grade: float                                  # steepest grade in the run, signed in travel direction
     length_m: float
     curb: str | None = None                       # crossings: ramp | flush | barrier | unknown
+    ramp_issue: bool = False                      # crossing with a steep or worn ramp
     coordinates: list[list[float]]                # [lon, lat] pairs, in travel order
 
 
@@ -78,3 +79,29 @@ class RouteResponse(BaseModel):
     destination_snap_m: float
     identical: bool                               # both routes are the same path
     routes: list[Route]
+
+
+class InspectResponse(BaseModel):
+    """What's at a tapped spot on the map."""
+    found: bool                                   # false = no path within reach of the tap
+    point: Point
+    kind: str | None = None                       # sidewalk | crossing | footway | pedestrian | steps | elevator
+    name: str | None = None
+    surface: str | None = None
+    grade: float | None = None                    # steepness, percent, unsigned
+    length_m: float | None = None
+    curb: str | None = None
+    ramp_issue: bool = False
+    access: Literal["both_ways", "one_way", "none"] | None = None
+    verdict: str | None = None                    # plain words for this profile
+    coordinates: list[list[float]] = []
+
+
+class NetworkLine(BaseModel):
+    cls: Literal["easy", "moderate", "over", "steps", "barrier"]
+    coordinates: list[list[float]]
+
+
+class NetworkResponse(BaseModel):
+    too_large: bool                               # view too big, zoom in
+    lines: list[NetworkLine]

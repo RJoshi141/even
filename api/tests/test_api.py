@@ -46,3 +46,27 @@ def test_custom_profile_overrides_preset(client):
 def test_outside_coverage(client):
     r = client.post("/route", json={"origin": OAKLAND, "destination": MISSION_24TH})
     assert r.status_code == 422
+
+
+def test_inspect_near_sidewalk(client):
+    r = client.get("/inspect", params={"lat": CIVIC_CENTER["lat"], "lon": CIVIC_CENTER["lon"]})
+    assert r.status_code == 200
+    body = r.json()
+    if body["found"]:
+        assert body["grade"] is not None and body["verdict"]
+
+
+def test_inspect_far_away(client):
+    assert client.get("/inspect", params=OAKLAND).json()["found"] is False
+
+
+def test_network_small_view(client):
+    r = client.get("/network", params={"min_lat": 37.775, "min_lon": -122.418,
+                                       "max_lat": 37.782, "max_lon": -122.410})
+    assert r.status_code == 200 and r.json()["too_large"] is False
+
+
+def test_network_too_large(client):
+    r = client.get("/network", params={"min_lat": 37.70, "min_lon": -122.50,
+                                       "max_lat": 37.80, "max_lon": -122.38})
+    assert r.json()["too_large"] is True

@@ -90,9 +90,47 @@ struct Segment: Decodable {
     let grade: Double            // steepest grade in the run, signed in travel direction
     let lengthM: Double
     let curb: String?
+    let rampIssue: Bool?         // crossing with a steep or worn ramp
     let coordinates: [[Double]]  // [lon, lat]
 
     var coords: [CLLocationCoordinate2D] {
         coordinates.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) }
     }
+}
+
+// MARK: - tap to inspect
+
+struct InspectResponse: Decodable {
+    let found: Bool
+    let point: GeoPoint
+    let kind: String?
+    let name: String?
+    let surface: String?
+    let grade: Double?           // unsigned, percent
+    let lengthM: Double?
+    let curb: String?
+    let rampIssue: Bool
+    let access: String?          // both_ways | one_way | none
+    let verdict: String?
+    let coordinates: [[Double]]
+
+    var coords: [CLLocationCoordinate2D] {
+        coordinates.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) }
+    }
+}
+
+// MARK: - slope layer
+
+struct NetworkLine: Decodable {
+    let cls: String              // easy | moderate | over | steps | barrier
+    let coordinates: [[Double]]
+
+    var coords: [CLLocationCoordinate2D] {
+        coordinates.map { CLLocationCoordinate2D(latitude: $0[1], longitude: $0[0]) }
+    }
+}
+
+struct NetworkResponse: Decodable {
+    let tooLarge: Bool
+    let lines: [NetworkLine]
 }

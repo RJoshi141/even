@@ -1,5 +1,7 @@
 """Route planning on the edges/nodes graph built by pipeline/build_graph.py."""
-from models import Point, Profile, Route, RouteSummary, Segment
+import json
+
+from models import InspectResponse, NetworkLine, NetworkResponse, Point, Profile, Route, RouteSummary, Segment
 
 MAX_SNAP_M = 200  # further than this from any sidewalk = outside coverage
 
@@ -38,7 +40,7 @@ SHORTEST_SQL = "SELECT id, source, target, length_m AS cost, length_m AS reverse
 PATH_SQL = """
 SELECT e.id, e.kind, e.curb, e.steep_ramp, e.poor_ramp, e.length_m,
        CASE WHEN r.node = e.source THEN e.grade ELSE -e.grade END AS g,
-       ST_AsGeoJSON(CASE WHEN r.node = e.source THEN e.geom ELSE ST_Reverse(e.geom) END) AS gj,
+       ST_AsGeoJSON(CASE WHEN r.node = e.source THEN e.geom ELSE ST_Reverse(e.geom) END, 6) AS gj,
        e.osm_id
 FROM pgr_dijkstra(%s, %s::bigint, %s::bigint, true) r
 JOIN edges e ON e.id = r.edge
@@ -82,20 +84,20 @@ def slope_class(g, p: Profile):
 
 def segments(rows, p: Profile) -> list[Segment]:
     """Merge consecutive edges that look the same, so the app draws fewer lines."""
-    import json
     out: list[Segment] = []
-    for _, kind, curb, _, _, length, g, gj, _ in rows:
+    for _, kind, curb, steep, poor, length, g, gj, _ in rows:
         coords = json.loads(gj)["coordinates"]
         cls = slope_class(g, p)
         last = out[-1] if out else None
-        if last and last.kind == kind and last.slope == cls and last.curb is None and curb is None:
+        if last and last.kind == kind and last.slope == cls and last.curb is None and curb is None \
+                and not (steep or poor):
             last.coordinates += coords[1:]
             last.length_m = round(last.length_m + length, 1)
             if abs(g) > abs(last.grade):
                 last.grade = round(g, 1)
         else:
             out.append(Segment(kind=kind, slope=cls, grade=round(g, 1), length_m=round(length, 1),
-                               curb=curb, coordinates=coords))
+                               curb=curb, ramp_issue=bool(steep or poor), coordinates=coords))
     return out
 
 
@@ -159,3 +161,92 @@ def plan(conn, origin: Point, destination: Point, p: Profile) -> dict:
         "identical": [x[0] for x in rows] == [x[0] for x in short_rows],
         "routes": routes,
     }
+
+
+# ---------- tap to inspect ----------
+
+INSPECT_SQL = """
+SELECT e.kind, e.grade, e.length_m, e.curb, (e.steep_ramp OR e.poor_ramp),
+       w.tags->>'surface', w.tags->>'name',
+       ST_Distance(e.geom::geography, ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography),
+       ST_AsGeoJSON(e.geom, 6)
+FROM edges e JOIN osm_ways w ON w.osm_id = e.osm_id
+ORDER BY e.geom <-> ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)
+LIMIT 1
+"""
+
+INSPECT_RADIUS_M = 25
+
+
+def inspect(conn, pt: Point, p: Profile) -> InspectResponse:
+    with conn.cursor() as cur:
+        cur.execute(INSPECT_SQL, {"lon": pt.lon, "lat": pt.lat})
+        row = cur.fetchone()
+    if row is None or row[7] > INSPECT_RADIUS_M:
+        return InspectResponse(found=False, point=pt)
+
+    kind, g, length, curb, ramp_issue, surface, name, _, gj = row
+    steep = abs(g)
+    blocked = (kind == "steps" and p.avoid_steps) or (curb == "barrier" and p.require_ramps)
+    fwd = g <= p.max_uphill and -g <= p.max_downhill
+    rev = -g <= p.max_uphill and g <= p.max_downhill
+
+    if kind == "steps" and p.avoid_steps:
+        access, verdict = "none", "Steps, not usable with your profile"
+    elif blocked:
+        access, verdict = "none", "No curb ramp here, not usable with your profile"
+    elif fwd and rev:
+        access, verdict = "both_ways", "Works both ways for you"
+    elif fwd or rev:
+        # one direction fails: say which one still works
+        downhill_ok = steep <= p.max_downhill
+        access = "one_way"
+        verdict = "Only works going downhill for you" if downhill_ok else "Only works going uphill for you"
+    else:
+        access, verdict = "none", "Too steep for you either way"
+
+    if ramp_issue and access != "none":
+        verdict += ". A ramp here is steep or worn"
+
+    return InspectResponse(
+        found=True, point=pt, kind=kind, name=name, surface=surface,
+        grade=round(steep, 1), length_m=round(length, 1), curb=curb, ramp_issue=bool(ramp_issue),
+        access=access, verdict=verdict, coordinates=json.loads(gj)["coordinates"],
+    )
+
+
+# ---------- slope layer ----------
+
+MAX_SPAN_DEG = 0.03  # about 3 km; bigger views ask the user to zoom in
+
+NETWORK_SQL = """
+WITH e AS (
+    SELECT CASE
+        WHEN kind = 'steps' THEN 'steps'
+        WHEN curb = 'barrier' THEN 'barrier'
+        WHEN abs(grade) > %(limit)s THEN 'over'
+        WHEN abs(grade) >= 3 THEN 'moderate'
+        ELSE 'easy' END AS cls,
+        geom
+    FROM edges
+    WHERE geom && ST_MakeEnvelope(%(w)s, %(s)s, %(e)s, %(n)s, 4326) AND kind <> 'elevator'
+), merged AS (
+    -- join touching pieces of the same class, so the app draws far fewer lines
+    SELECT cls, ST_LineMerge(ST_Collect(geom)) AS g FROM e GROUP BY cls
+)
+SELECT m.cls, ST_AsGeoJSON(d.geom, 6)
+FROM merged m, LATERAL ST_Dump(m.g) d
+"""
+
+
+def network(conn, w, s, e, n, p: Profile) -> NetworkResponse:
+    if (n - s) > MAX_SPAN_DEG or (e - w) > MAX_SPAN_DEG * 1.3:
+        return NetworkResponse(too_large=True, lines=[])
+    # "over" means too steep in at least one direction for this profile
+    limit = min(p.max_uphill, p.max_downhill)
+    with conn.cursor() as cur:
+        cur.execute(NETWORK_SQL, {"w": w, "s": s, "e": e, "n": n, "limit": limit})
+        rows = cur.fetchall()
+    return NetworkResponse(too_large=False, lines=[
+        NetworkLine(cls=cls, coordinates=json.loads(gj)["coordinates"]) for cls, gj in rows
+    ])
