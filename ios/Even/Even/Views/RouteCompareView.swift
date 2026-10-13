@@ -17,19 +17,76 @@ struct RouteCompareView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(model.origin.name, systemImage: "circle")
+        VStack(alignment: .leading, spacing: 10) {
+            // from / to, like a maps app
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "circle")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 20)
+                    Text(model.origin.name)
+                    Spacer()
+                }
+                .padding(12)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("From \(model.origin.name)")
+
+                Divider().padding(.leading, 44)
+
+                Menu {
+                    Picker("Destination", selection: $model.destination) {
+                        ForEach(Places.destinations) { Text($0.name).tag($0) }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(Color.evenTeal)
+                            .frame(width: 20)
+                        Text(model.destination.name)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityLabel("To \(model.destination.name)")
+                .accessibilityHint("Choose a destination")
+            }
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
+
+            // mobility profile as a chip, limits shown once the server confirms them
+            Menu {
+                Picker("Profile", selection: $model.preset) {
+                    ForEach(Preset.allCases) { Text($0.label).tag($0) }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "figure.roll")
+                    Text(profileText)
+                    Image(systemName: "chevron.down").font(.caption2)
+                }
                 .font(.subheadline)
-            Picker("Destination", selection: $model.destination) {
-                ForEach(Places.destinations) { Text($0.name).tag($0) }
+                .foregroundStyle(Color.evenTeal)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.evenTeal.opacity(0.1), in: Capsule())
             }
-            Picker("Profile", selection: $model.preset) {
-                ForEach(Preset.allCases) { Text($0.label).tag($0) }
-            }
+            .accessibilityLabel("Mobility profile, \(profileText)")
+            .accessibilityHint("Change your mobility profile")
         }
-        .pickerStyle(.menu)
         .padding(.horizontal)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
+    }
+
+    private var profileText: String {
+        if case .loaded(let r) = model.state {
+            return "\(model.preset.label) · up \(Int(r.profile.maxUphill))% · down \(Int(r.profile.maxDownhill))%"
+        }
+        return model.preset.label
     }
 
     @ViewBuilder private var content: some View {

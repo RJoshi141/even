@@ -29,6 +29,16 @@ struct RouteMapView: View {
                 }
             }
 
+            // when the route can't reach the destination, show where it stops and the gap left
+            if let route = response.routes.first(where: { $0.kind == selected }),
+               !route.reachesDestination,
+               let end = route.allCoordinates.last {
+                MapPolyline(coordinates: [end, destination.point.coordinate])
+                    .stroke(Color.evenTeal, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [1, 6]))
+                Marker("Closest you can get", systemImage: "figure.roll", coordinate: end)
+                    .tint(Color.slopeModerate)
+            }
+
             Marker(origin.name, systemImage: "circle.fill", coordinate: origin.point.coordinate)
                 .tint(.black)
             Marker(destination.name, systemImage: "mappin", coordinate: destination.point.coordinate)

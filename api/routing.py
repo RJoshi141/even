@@ -8,7 +8,11 @@ class OutsideCoverage(Exception):
     pass
 
 
-WEIGHT = "length_m * (1 + abs(grade) / 10) * (CASE WHEN curb = 'unknown' THEN 1.5 ELSE 1 END)"
+# cost in "effective meters": hills, unverified curbs and bad ramps all make an edge feel longer.
+# a bad ramp makes its crosswalk cost 4x, so a ~15 m crossing is worth a ~45 m detour to avoid
+WEIGHT = """length_m * (1 + abs(grade) / 10)
+    * (CASE WHEN curb = 'unknown' THEN 1.5 ELSE 1 END)
+    * (CASE WHEN steep_ramp OR poor_ramp THEN 4 ELSE 1 END)"""
 
 
 def profile_sql(p: Profile) -> str:
@@ -34,7 +38,8 @@ SHORTEST_SQL = "SELECT id, source, target, length_m AS cost, length_m AS reverse
 PATH_SQL = """
 SELECT e.id, e.kind, e.curb, e.steep_ramp, e.poor_ramp, e.length_m,
        CASE WHEN r.node = e.source THEN e.grade ELSE -e.grade END AS g,
-       ST_AsGeoJSON(CASE WHEN r.node = e.source THEN e.geom ELSE ST_Reverse(e.geom) END) AS gj
+       ST_AsGeoJSON(CASE WHEN r.node = e.source THEN e.geom ELSE ST_Reverse(e.geom) END) AS gj,
+       e.osm_id
 FROM pgr_dijkstra(%s, %s::bigint, %s::bigint, true) r
 JOIN edges e ON e.id = r.edge
 ORDER BY r.seq
@@ -78,7 +83,7 @@ def segments(rows, p: Profile) -> list[Segment]:
     """Merge consecutive edges that look the same, so the app draws fewer lines."""
     import json
     out: list[Segment] = []
-    for _, kind, curb, _, _, length, g, gj in rows:
+    for _, kind, curb, _, _, length, g, gj, _ in rows:
         coords = json.loads(gj)["coordinates"]
         cls = slope_class(g, p)
         last = out[-1] if out else None
@@ -98,16 +103,21 @@ def summarize(rows, p: Profile) -> tuple[RouteSummary, list[str]]:
     # uphill slows you down, floor at 40% of flat speed
     dur = sum(r[5] / (p.speed_mps * max(0.4, 1 - max(r[6], 0) / 20)) for r in rows)
     grades = [r[6] for r in rows] or [0.0]
+
+    def crosswalks(test):
+        # a crosswalk is split into several edges, count each OSM crossing once
+        return len({r[8] for r in rows if test(r)})
+
     s = RouteSummary(
         distance_m=round(dist, 1),
         duration_s=round(dur),
         max_uphill=round(max(max(grades), 0), 1),
         max_downhill=round(max(-min(grades), 0), 1),
-        steps=sum(r[1] == "steps" for r in rows),
-        barrier_curbs=sum(r[2] == "barrier" for r in rows),
-        unknown_curbs=sum(r[2] == "unknown" for r in rows),
-        steep_ramps=sum(bool(r[3]) for r in rows),
-        poor_ramps=sum(bool(r[4]) for r in rows),
+        steps=crosswalks(lambda r: r[1] == "steps"),
+        barrier_curbs=crosswalks(lambda r: r[2] == "barrier"),
+        unknown_curbs=crosswalks(lambda r: r[2] == "unknown"),
+        steep_ramps=crosswalks(lambda r: bool(r[3])),
+        poor_ramps=crosswalks(lambda r: bool(r[4])),
     )
     breaks = []
     if s.max_uphill > p.max_uphill:
