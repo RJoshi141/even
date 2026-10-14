@@ -63,6 +63,20 @@ class RouteSummary(BaseModel):
     poor_ramps: int
 
 
+class Step(BaseModel):
+    """One turn-by-turn instruction."""
+    maneuver: Literal["start", "straight", "slight_left", "slight_right", "left", "right",
+                      "sharp_left", "sharp_right", "cross", "arrive"]
+    instruction: str                              # "Turn left on the sidewalk"
+    detail: str | None = None                     # "Gentle uphill, 3.4% · Concrete"
+    length_m: float = 0
+    grade: float = 0                              # steepest, signed in travel direction
+    slope: Literal["easy", "moderate", "over"] = "easy"
+    kind: str | None = None
+    curb: str | None = None
+    coordinate: list[float]                       # [lon, lat] where the step begins
+
+
 class Route(BaseModel):
     kind: Literal["fits_profile", "shortest"]
     reaches_destination: bool
@@ -71,6 +85,7 @@ class Route(BaseModel):
     breaks: list[str]                             # uphill | downhill | steps | curb
     summary: RouteSummary
     segments: list[Segment]
+    steps: list[Step] = []
 
 
 class RouteResponse(BaseModel):

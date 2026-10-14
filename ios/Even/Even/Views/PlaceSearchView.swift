@@ -1,5 +1,6 @@
 import MapKit
 import SwiftUI
+import UIKit
 
 struct PlaceSearchView: View {
     let title: String                 // "From" or "To"
@@ -12,6 +13,8 @@ struct PlaceSearchView: View {
     @State private var searching = false
     @State private var locating = false
     @State private var errorText: String?
+    @State private var showSettings = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack {
@@ -36,7 +39,15 @@ struct PlaceSearchView: View {
                     }
                 }
                 if let errorText {
-                    Text(errorText).foregroundStyle(Color.slopeOver)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(errorText).foregroundStyle(Color.warning)
+                        if showSettings {
+                            Button("Open Settings") {
+                                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                            }
+                            .fontWeight(.semibold)
+                        }
+                    }
                 }
             }
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
@@ -61,7 +72,7 @@ struct PlaceSearchView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(place.name).foregroundStyle(.primary)
                 if let subtitle = place.subtitle {
-                    Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(subtitle).font(.even(.caption)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -98,12 +109,22 @@ struct PlaceSearchView: View {
 
     private func useCurrentLocation() async {
         locating = true
+        errorText = nil
+        showSettings = false
         defer { locating = false }
         do {
             let location = try await LocationProvider.current()
+            // check before routing, so the user hears why instead of seeing a failed route
+            guard Coverage.contains(location.coordinate) else {
+                errorText = "You're outside the area Even covers so far (\(Coverage.description) in San Francisco). Pick a starting point there for now."
+                return
+            }
             onPick(Place(name: "Current location",
                          point: GeoPoint(lat: location.coordinate.latitude, lon: location.coordinate.longitude)))
             dismiss()
+        } catch let error as LocationProvider.LocationError {
+            errorText = error.localizedDescription
+            showSettings = error == .denied
         } catch {
             errorText = error.localizedDescription
         }

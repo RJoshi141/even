@@ -14,7 +14,9 @@ final class RouteViewModel {
     var state: State = .loading
     var origin = Places.civicCenter
     var destination = Places.suggestions[1]
-    var preset: Preset = .manualWheelchair
+    var preset: Preset = Preset(rawValue: UserDefaults.standard.string(forKey: "preset") ?? "") ?? .manualWheelchair {
+        didSet { UserDefaults.standard.set(preset.rawValue, forKey: "preset") }
+    }
     var selected: RouteKind = .fitsProfile
 
     // tap to inspect
@@ -29,6 +31,7 @@ final class RouteViewModel {
     private var lastRegion: MKCoordinateRegion?
 
     private let api = EvenAPI()
+    private var didPrepareStart = false
 
     // changes whenever the request does, so views reload and refit
     var requestKey: String { "\(origin.id)|\(destination.id)|\(preset.rawValue)" }
@@ -50,6 +53,17 @@ final class RouteViewModel {
             state = .failed(error.localizedDescription)
         }
         if slopeLayerOn { await loadNetwork() } // profile may have changed the colors
+    }
+
+    /// If the user opted in on the start page, begin from where they are (when it's inside coverage).
+    func prepareStart() async {
+        guard !didPrepareStart else { return }
+        didPrepareStart = true
+        guard UserDefaults.standard.bool(forKey: "useLocationStart"),
+              let location = try? await LocationProvider.current(timeout: .seconds(6)),
+              Coverage.contains(location.coordinate) else { return }
+        origin = Place(name: "Current location",
+                       point: GeoPoint(lat: location.coordinate.latitude, lon: location.coordinate.longitude))
     }
 
     func swap() {

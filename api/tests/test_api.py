@@ -70,3 +70,10 @@ def test_network_too_large(client):
     r = client.get("/network", params={"min_lat": 37.70, "min_lon": -122.50,
                                        "max_lat": 37.80, "max_lon": -122.38})
     assert r.json()["too_large"] is True
+
+
+def test_route_has_directions(client):
+    r = client.post("/route", json={"origin": CIVIC_CENTER, "destination": MISSION_24TH}).json()
+    steps = r["routes"][0]["steps"]
+    assert steps, "expected turn-by-turn steps"
+    assert steps[0]["maneuver"] == "start" and steps[-1]["maneuver"] == "arrive"

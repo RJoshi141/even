@@ -63,6 +63,7 @@ struct Route: Decodable, Identifiable {
     let breaks: [String]         // uphill | downhill | steps | curb
     let summary: RouteSummary
     let segments: [Segment]
+    let steps: [Step]?
 
     var id: RouteKind { kind }
     var allCoordinates: [CLLocationCoordinate2D] { segments.flatMap(\.coords) }
@@ -78,6 +79,19 @@ struct RouteSummary: Decodable {
     let unknownCurbs: Int
     let steepRamps: Int
     let poorRamps: Int
+}
+
+/// one turn-by-turn instruction
+struct Step: Decodable {
+    let maneuver: String        // start | straight | slight_left | ... | cross | arrive
+    let instruction: String
+    let detail: String?
+    let lengthM: Double
+    let grade: Double
+    let slope: SlopeClass
+    let kind: String?
+    let curb: String?
+    let coordinate: [Double]    // [lon, lat]
 }
 
 enum SlopeClass: String, Decodable {

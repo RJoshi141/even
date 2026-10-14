@@ -5,6 +5,7 @@ import SwiftUI
 struct SlopeChart: View {
     let route: Route
     let profile: Profile
+    var height: CGFloat = 64
 
     private struct Bar: Identifiable {
         let id: Int
@@ -44,11 +45,22 @@ struct SlopeChart: View {
         }
         .chartXAxis(.hidden)
         .chartYAxis(.hidden)
-        .chartYScale(domain: -16.0...16.0)
-        .frame(height: 64)
+        .chartYScale(domain: -bottom...top)
+        .frame(height: height)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Slope along the route")
         .accessibilityValue(spokenSummary)
+    }
+
+    // scale to the limits and the route's steepest point, with a little headroom, so the bars fill the chart
+    private var top: Double {
+        let steepest = route.segments.map(\.grade).max() ?? 0
+        return min(16, max(profile.maxUphill, steepest) + 2)
+    }
+
+    private var bottom: Double {
+        let steepest = -(route.segments.map(\.grade).min() ?? 0)
+        return min(16, max(profile.maxDownhill, steepest) + 2)
     }
 
     private var spokenSummary: String {

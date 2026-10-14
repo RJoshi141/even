@@ -27,4 +27,9 @@ enum Coverage {
         center: .init(latitude: 37.7715, longitude: -122.4100),
         span: .init(latitudeDelta: 0.047, longitudeDelta: 0.040))
     static let description = "Downtown, SoMa and the Mission"
+
+    static func contains(_ c: CLLocationCoordinate2D) -> Bool {
+        abs(c.latitude - region.center.latitude) <= region.span.latitudeDelta / 2
+            && abs(c.longitude - region.center.longitude) <= region.span.longitudeDelta / 2
+    }
 }

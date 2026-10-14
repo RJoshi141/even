@@ -6,7 +6,8 @@ struct RouteCompareView: View {
     @State private var editing: Field?
     @State private var swaps = 0
     @State private var fitTrigger = 0
-    @State private var expanded = false
+    @State private var popup: TripPanel?
+    @State private var showProfiles = false
 
     enum Field: String, Identifiable {
         case origin, destination
@@ -21,6 +22,8 @@ struct RouteCompareView: View {
         .safeAreaInset(edge: .top) { placesCard }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomPanel }
         .task(id: model.requestKey) { await model.load() }
+        .task { await model.prepareStart() }
+        .overlay { popupLayer }
         .sheet(item: $editing) { field in
             PlaceSearchView(title: field == .origin ? "From" : "To",
                             allowsCurrentLocation: field == .origin) { place in
@@ -30,8 +33,6 @@ struct RouteCompareView: View {
         .animation(.snappy, value: model.tapped)
         .animation(.snappy, value: model.showLegend)
         // the active style's type and icon treatment, applied to everything below
-        .fontDesign(style.fontDesign)
-        .fontWidth(style.fontWidth)
         .symbolVariant(style.filledIcons ? .fill : .none)
         .symbolRenderingMode(style.hierarchicalIcons ? .hierarchical : .monochrome)
         .tint(style.accent)
@@ -42,10 +43,10 @@ struct RouteCompareView: View {
     private var placesCard: some View {
         HStack(spacing: 0) {
             VStack(spacing: 0) {
-                placeRow(letter: "A", fill: .ink, place: model.origin) { editing = .origin }
+                placeRow(letter: "A", filled: false, place: model.origin) { editing = .origin }
                     .accessibilityLabel("From \(model.origin.name)")
                 Divider().padding(.leading, 40)
-                placeRow(letter: "B", fill: .brand, place: model.destination) { editing = .destination }
+                placeRow(letter: "B", filled: true, place: model.destination) { editing = .destination }
                     .accessibilityLabel("To \(model.destination.name)")
             }
 
@@ -54,28 +55,25 @@ struct RouteCompareView: View {
                 swaps += 1
             } label: {
                 Image(systemName: style.icons.swap)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.even(.subheadline, .semibold))
                     .foregroundStyle(.secondary)
                     .symbolEffect(.bounce, value: swaps)
                     .frame(width: 44, height: 80)
             }
             .accessibilityLabel("Swap start and destination")
         }
-        .background(.regularMaterial, in: .rect(cornerRadius: style.corner + 4))
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
+        .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
         .padding(.horizontal, 12)
     }
 
-    private func placeRow(letter: String, fill: Color, place: Place, action: @escaping () -> Void) -> some View {
+    private func placeRow(letter: String, filled: Bool, place: Place, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Text(letter)
-                    .font(.system(size: 10, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .frame(width: 18, height: 18)
-                    .background(fill, in: .rect(cornerRadius: style.pin == .circle ? 9 : 4))
+                LetterPin(letter: letter, filled: filled, size: 20)
                 Text(place.name)
-                    .font(.subheadline.weight(.medium))
+                    .font(.even(.subheadline, .medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -92,46 +90,58 @@ struct RouteCompareView: View {
 
     private var mapControls: some View {
         HStack(alignment: .top, spacing: 8) {
-            if model.showLegend {
+            // one panel at a time, opening beside the controls
+            if showProfiles {
+                ProfilePanel(selection: $model.preset,
+                             onPicked: { withAnimation(.snappy) { showProfiles = false } },
+                             onSetUpAgain: { UserDefaults.standard.set(false, forKey: "onboarded") })
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else if model.showLegend {
                 LegendPanel(profile: model.response?.profile)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
             VStack(spacing: 8) {
-                VStack(spacing: 0) {
-                    Menu {
-                        Picker("Profile", selection: $model.preset) {
-                            ForEach(Preset.allCases) { Label($0.label, systemImage: $0.symbol).tag($0) }
+                VStack(spacing: 4) {
+                    Button {
+                        withAnimation(.snappy) {
+                            showProfiles.toggle()
+                            if showProfiles { model.showLegend = false }
                         }
                     } label: {
-                        controlIcon(model.preset.symbol, on: false)
+                        PresetIcon(preset: model.preset, size: 21)
+                            .foregroundStyle(showProfiles ? Color.onHighlight : Color.primary)
+                            .frame(width: 44, height: 44)
+                            .background(showProfiles ? Color.highlight : .clear, in: .rect(cornerRadius: style.corner))
                     }
                     .accessibilityLabel("Mobility profile, \(model.preset.label)")
+                    .accessibilityAddTraits(showProfiles ? .isSelected : [])
 
-                    Divider().frame(width: 24)
                     controlButton(style.icons.legend, "Legend", on: model.showLegend) {
-                        model.showLegend.toggle()
+                        withAnimation(.snappy) {
+                            model.showLegend.toggle()
+                            if model.showLegend { showProfiles = false }
+                        }
                     }
-                    Divider().frame(width: 24)
                     controlButton(style.icons.layers, "Slope layer", on: model.slopeLayerOn) {
                         Task { await model.toggleSlopeLayer() }
                     }
-                    Divider().frame(width: 24)
                     controlButton(style.icons.fit, "Fit route on screen", on: false) {
                         fitTrigger += 1
                     }
-                    Divider().frame(width: 24)
-                    styleMenu
                 }
-                .background(.regularMaterial, in: .rect(cornerRadius: style.corner))
-                .shadow(color: .black.opacity(0.1), radius: 6, y: 2)
+                .padding(4)
+                .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
+                .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
 
                 if model.slopeLayerOn, model.network?.tooLarge == true {
                     Text("Zoom in")
-                        .font(.caption2.weight(.semibold))
+                        .font(.even(.caption2, .semibold))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(.regularMaterial, in: Capsule())
+                        .background(Color.paper, in: Capsule())
+                        .overlay(Capsule().stroke(Color.hairline, lineWidth: 1))
                 }
             }
         }
@@ -141,31 +151,12 @@ struct RouteCompareView: View {
 
     private func controlIcon(_ icon: String, on: Bool) -> some View {
         Image(systemName: icon)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(on ? Color.brand : Color.primary)
-            .frame(width: 40, height: 40)
-            .background(on ? Color.brand.opacity(0.15) : .clear, in: .rect(cornerRadius: max(style.corner - 3, 4)))
-            .padding(2)
-    }
-
-    // Style Lab: try every look on the real map
-    private var styleMenu: some View {
-        Menu {
-            Picker("Style", selection: Binding(
-                get: { StyleStore.shared.current.id },
-                set: { id in
-                    if let s = EvenStyle.all.first(where: { $0.id == id }) {
-                        withAnimation(.snappy) { StyleStore.shared.current = s }
-                    }
-                })) {
-                ForEach(EvenStyle.all) { s in
-                    Text("\(s.name)  ·  \(s.blurb)").tag(s.id)
-                }
-            }
-        } label: {
-            controlIcon("paintpalette", on: false)
-        }
-        .accessibilityLabel("Style, \(style.name)")
+            .font(.system(size: 18, weight: .medium))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(on ? Color.onHighlight : Color.primary)
+            .frame(width: 44, height: 44)
+            .background(on ? Color.highlight : .clear, in: .rect(cornerRadius: style.corner))
+            .contentShape(Rectangle())
     }
 
     private func controlButton(_ icon: String, _ label: String, on: Bool, action: @escaping () -> Void) -> some View {
@@ -176,48 +167,98 @@ struct RouteCompareView: View {
 
     // MARK: bottom
 
-    private var bottomPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if model.tapped != nil {
-                InspectCard(info: model.inspected,
-                            loading: model.inspecting,
-                            profile: model.response?.profile,
-                            onRouteFrom: { Task { await model.useTapped(asOrigin: true) } },
-                            onRouteTo: { Task { await model.useTapped(asOrigin: false) } },
-                            onClose: { model.closeInspect() })
-                    .transition(.opacity)
-            } else {
+    @ViewBuilder private var bottomPanel: some View {
+        if model.tapped != nil {
+            // tapped spot: a paper panel from the bottom edge
+            InspectCard(info: model.inspected,
+                        loading: model.inspecting,
+                        profile: model.response?.profile,
+                        onRouteFrom: { Task { await model.useTapped(asOrigin: true) } },
+                        onRouteTo: { Task { await model.useTapped(asOrigin: false) } },
+                        onClose: { model.closeInspect() },
+                        originName: model.origin.name,
+                        destinationName: model.destination.name)
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background {
+                    UnevenRoundedRectangle(topLeadingRadius: style.sheetCorner, topTrailingRadius: style.sheetCorner)
+                        .fill(Color.paper)
+                        .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
+                        .shadow(color: .black.opacity(0.06), radius: 10, y: -2)
+                        .ignoresSafeArea(edges: .bottom)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else {
+            // routes: cards floating over the map, the map stays full screen
+            Group {
                 switch model.state {
                 case .loading:
-                    HStack(spacing: 10) {
-                        ProgressView()
-                        Text("Finding the gentlest way…").font(.subheadline).foregroundStyle(.secondary)
+                    floating {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                            Text("Finding the gentlest way…").font(.even(.subheadline)).foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                        }
                     }
-                    .padding(.vertical, 8)
                 case .failed(let message):
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.berry)
-                        Text(message).font(.subheadline).foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                        Button("Retry") { Task { await model.load() } }
-                            .font(.subheadline.weight(.semibold))
+                    floating {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Color.warning)
+                            Text(message).font(.even(.subheadline)).foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                            Button("Retry") { Task { await model.load() } }
+                                .font(.even(.subheadline, .semibold))
+                        }
                     }
                 case .loaded(let r):
-                    ComparePanel(response: r, selected: $model.selected, expanded: $expanded,
-                                 destinationName: model.destination.name)
+                    if let route = r.routes.first(where: { $0.kind == .fitsProfile }) {
+                        TripCard(route: route, profile: r.profile,
+                                 destinationName: model.destination.name) { panel in
+                            withAnimation(.snappy(duration: 0.25)) { popup = panel }
+                        }
+                    }
                 }
             }
+            .padding(.bottom, 8)
+            .transition(.opacity)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 14)
-        .padding(.bottom, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            UnevenRoundedRectangle(topLeadingRadius: style.sheetCorner, topTrailingRadius: style.sheetCorner)
-                .fill(Color(uiColor: .systemBackground))
-                .shadow(color: .black.opacity(0.1), radius: 12, y: -2)
-                .ignoresSafeArea(edges: .bottom)
+    }
+
+    // trip info / directions, centered over a dimmed map
+    @ViewBuilder private var popupLayer: some View {
+        if let panel = popup, let r = model.response {
+            GeometryReader { geo in
+                ZStack {
+                    Color.black.opacity(0.35)
+                        .ignoresSafeArea()
+                        .onTapGesture { closePopup() }
+                        .accessibilityHidden(true)
+                    TripPopup(panel: panel, response: r,
+                              originName: model.origin.name, destinationName: model.destination.name,
+                              maxHeight: geo.size.height * 0.78, onClose: closePopup)
+                        .padding(.horizontal, 16)
+                        .transition(.scale(scale: 0.96).combined(with: .opacity))
+                }
+                .frame(width: geo.size.width, height: geo.size.height)
+            }
+            .transition(.opacity)
+            .zIndex(10)
         }
+    }
+
+    private func closePopup() {
+        withAnimation(.snappy(duration: 0.2)) { popup = nil }
+    }
+
+    private func floating<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
+            .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
+            .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
+            .padding(.horizontal, 12)
     }
 }
 
