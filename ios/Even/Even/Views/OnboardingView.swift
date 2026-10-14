@@ -1,5 +1,19 @@
 import SwiftUI
 
+// the start screens sit on brand blue; everything on them is white or paper
+private extension Color {
+    static let obBlue = Color(hex: 0x1D4ED8)
+    static let obText = Color.white
+    static let obSoft = Color.white.opacity(0.75)
+    static let obFaint = Color.white.opacity(0.12)
+    static let obLine = Color.white.opacity(0.24)
+    static let obInk = Color(hex: 0x111111)
+    // the illustration cards stay light paper, whatever the system appearance
+    static let cardPaper = Color(hex: 0xFBFAF7)
+    static let cardDeep = Color(hex: 0xF1EEE7)
+    static let cardLine = Color(hex: 0xDDD9CF)
+}
+
 /// First launch, three questions: what Even is, how you get around, where you start.
 struct OnboardingView: View {
     let onFinish: (Preset) -> Void
@@ -29,8 +43,9 @@ struct OnboardingView: View {
             bottomBar
         }
         .padding(.horizontal, 24)
-        .background(Color.paper.ignoresSafeArea())
-        .sensoryFeedback(.impact(weight: .light), trigger: page)
+        .foregroundStyle(Color.obText)
+        .background(Color.obBlue.ignoresSafeArea())
+        .preferredColorScheme(.dark) // white status bar on the blue
     }
 
     // pages slide the way you're going; Reduce Motion gets a plain fade
@@ -54,14 +69,14 @@ struct OnboardingView: View {
     private var topBar: some View {
         HStack {
             if page == .welcome {
-                Wordmark(size: 22)
+                Wordmark(size: 22, dot: Color(hex: 0x93C5FD))
             } else {
                 Button {
                     go(Page(rawValue: page.rawValue - 1) ?? .welcome)
                 } label: {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.primary)
+                        .foregroundStyle(Color.obText)
                         .frame(width: 44, height: 44, alignment: .leading)
                 }
                 .accessibilityLabel("Back")
@@ -70,7 +85,7 @@ struct OnboardingView: View {
             HStack(spacing: 6) {
                 ForEach(Page.allCases, id: \.self) { p in
                     Capsule()
-                        .fill(p.rawValue <= page.rawValue ? Color.ink : Color.hairline)
+                        .fill(p.rawValue <= page.rawValue ? Color.obText : Color.obLine)
                         .frame(width: p == page ? 22 : 8, height: 8)
                 }
             }
@@ -99,7 +114,7 @@ struct OnboardingView: View {
                     onFinish(choice)
                 }
                 .font(.even(.subheadline, .medium))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.obSoft)
                 .frame(maxWidth: .infinity, minHeight: 44)
             }
         }
@@ -117,10 +132,10 @@ struct OnboardingView: View {
                 Spacer()
                 Image(systemName: icon).font(.system(size: 16, weight: .semibold))
             }
-            .foregroundStyle(Color.onBrand)
+            .foregroundStyle(Color.obBlue)
             .padding(.horizontal, 20)
             .frame(maxWidth: .infinity, minHeight: 56)
-            .background(Color.brand, in: .rect(cornerRadius: StyleStore.shared.current.corner + 4))
+            .background(Color.white, in: .rect(cornerRadius: StyleStore.shared.current.corner + 4))
         }
         .buttonStyle(PressableStyle())
     }
@@ -156,7 +171,7 @@ private struct WelcomePage: View {
                 .reveal(0.2)
             Text("Step-free routes around steep blocks, missing curb ramps and stairs, planned for how you get around.")
                 .font(.even(.body))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.obSoft)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
                 .reveal(0.3)
@@ -181,7 +196,7 @@ private struct ProfilePage: View {
                 .reveal(0)
             Text("Even shapes every route around this. You can change it anytime.")
                 .font(.even(.body))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.obSoft)
                 .padding(.top, 10)
                 .reveal(0.08)
 
@@ -191,7 +206,6 @@ private struct ProfilePage: View {
                 }
             }
             .padding(.top, 24)
-            .sensoryFeedback(.selection, trigger: choice)
 
             limits
                 .padding(.top, 16)
@@ -209,9 +223,9 @@ private struct ProfilePage: View {
         } label: {
             HStack(spacing: 14) {
                 PresetIcon(preset: preset, size: 24)
-                    .foregroundStyle(isOn ? Color.ink : Color.primary)
+                    .foregroundStyle(Color.white)
                     .frame(width: 44, height: 44)
-                    .background(isOn ? Color.white : Color.paperDeep, in: .rect(cornerRadius: corner))
+                    .background(isOn ? Color.obBlue : Color.obFaint, in: .rect(cornerRadius: corner))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(preset.label).font(.even(.headline))
                     Text(preset.blurb)
@@ -222,12 +236,12 @@ private struct ProfilePage: View {
                 Spacer(minLength: 0)
                 Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
-                    .foregroundStyle(isOn ? Color.white : Color.hairline)
+                    .foregroundStyle(isOn ? Color.obBlue : Color.obLine)
             }
-            .foregroundStyle(isOn ? Color.onHighlight : Color.primary)
+            .foregroundStyle(isOn ? Color.obInk : Color.obText)
             .padding(12)
-            .background(isOn ? Color.highlight : Color.paper, in: .rect(cornerRadius: corner + 4))
-            .overlay(RoundedRectangle(cornerRadius: corner + 4).stroke(isOn ? Color.clear : Color.hairline, lineWidth: 1))
+            .background(isOn ? Color.white : Color.white.opacity(0.06), in: .rect(cornerRadius: corner + 4))
+            .overlay(RoundedRectangle(cornerRadius: corner + 4).stroke(isOn ? Color.clear : Color.obLine, lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
         .accessibilityElement(children: .ignore)
@@ -239,7 +253,7 @@ private struct ProfilePage: View {
     private var limits: some View {
         let l = choice.numbers
         return VStack(alignment: .leading, spacing: 10) {
-            SectionLabel(text: "What this means")
+            OnBlueLabel(text: "What this means")
             HStack(spacing: 8) {
                 fact("↑ \(l.up)%", "Max uphill")
                 fact("↓ \(l.down)%", "Max downhill")
@@ -256,11 +270,11 @@ private struct ProfilePage: View {
                 .font(.even(.title3, .bold))
                 .monospacedDigit()
                 .contentTransition(.numericText())
-            SectionLabel(text: label)
+            OnBlueLabel(text: label)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
         .padding(12)
-        .background(Color.paperDeep, in: .rect(cornerRadius: StyleStore.shared.current.corner))
+        .background(Color.obFaint, in: .rect(cornerRadius: StyleStore.shared.current.corner))
     }
 }
 
@@ -295,7 +309,7 @@ private struct LocationPage: View {
                 .reveal(0.15)
             Text("Even can use your location as point A, so you only choose where you're going. It's used to plan your route, only while the app is open.")
                 .font(.even(.body))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.obSoft)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
                 .reveal(0.25)
@@ -342,7 +356,7 @@ private struct RouteIllustration: View {
 
                 // the shortcut: straight over the hill, ruled out
                 Path { p in p.move(to: a); p.addLine(to: b) }
-                    .stroke(Color.slopeOver.opacity(0.6), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 9]))
+                    .stroke(Color.obInk.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 9]))
                     .opacity(shortcut ? 1 : 0)
 
                 // the Even route: around it
@@ -385,12 +399,12 @@ private struct LocationIllustration: View {
         ZStack {
             MapGrid()
             Circle()
-                .fill(Color.brand.opacity(0.12))
+                .fill(Color.obBlue.opacity(0.18))
                 .frame(width: 150, height: 150)
                 .scaleEffect(pulse ? 1 : 0.5)
                 .opacity(pulse ? 0 : 1)
             Circle()
-                .fill(Color.brand.opacity(0.12))
+                .fill(Color.obBlue.opacity(0.18))
                 .frame(width: 70, height: 70)
             LetterPin(letter: "A", filled: false, size: 40)
         }
@@ -410,7 +424,7 @@ private struct MapGrid: View {
             let w = geo.size.width
             let h = geo.size.height
             ZStack {
-                RoundedRectangle(cornerRadius: corner).fill(Color.paperDeep)
+                RoundedRectangle(cornerRadius: corner).fill(Color.cardDeep)
                 Path { p in
                     for i in 1..<5 {
                         let x = w * CGFloat(i) / 5
@@ -423,10 +437,11 @@ private struct MapGrid: View {
                         p.addLine(to: CGPoint(x: w, y: y))
                     }
                 }
-                .stroke(Color.paper, lineWidth: 8)
-                RoundedRectangle(cornerRadius: corner).stroke(Color.hairline, lineWidth: 1)
+                .stroke(Color.cardPaper, lineWidth: 8)
+                RoundedRectangle(cornerRadius: corner).stroke(Color.cardLine, lineWidth: 1)
             }
             .clipShape(.rect(cornerRadius: corner))
+            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
         }
     }
 }
@@ -435,6 +450,7 @@ private struct MapGrid: View {
 
 struct Wordmark: View {
     var size: CGFloat = 22
+    var dot: Color = .brand
 
     var body: some View {
         HStack(alignment: .lastTextBaseline, spacing: size * 0.06) {
@@ -442,7 +458,7 @@ struct Wordmark: View {
                 .font(.evenFixed(size, .bold))
                 .tracking(-size * 0.04)
             Circle()
-                .fill(Color.brand)
+                .fill(dot)
                 .frame(width: size * 0.22, height: size * 0.22)
                 .padding(.bottom, size * 0.16)
         }
@@ -470,4 +486,14 @@ private struct Reveal: ViewModifier {
 
 private extension View {
     func reveal(_ delay: Double) -> some View { modifier(Reveal(delay: delay)) }
+}
+
+private struct OnBlueLabel: View {
+    let text: String
+    var body: some View {
+        Text(text.uppercased())
+            .font(.even(.caption2, .semibold))
+            .tracking(0.6)
+            .foregroundStyle(Color.white.opacity(0.7))
+    }
 }
