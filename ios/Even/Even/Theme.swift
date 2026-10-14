@@ -24,13 +24,14 @@ extension Color {
     static let paperDeep = Color(light: 0xF1EEE7, dark: 0x222429)   // tiles, wells
     static let hairline = Color(light: 0xDDD9CF, dark: 0x34363C)    // 1pt rules and borders
     static let onBrand = Color.white                                   // text on a blue button
-    static let highlight = Color(light: 0x111111, dark: 0xF2F0EB)      // ink: selection, active controls
-    static let onHighlight = Color(light: 0xFFFFFF, dark: 0x111111)    // text and icons on ink
+    static var highlight: Color { brand }                              // blue: selection, active controls
+    static let onHighlight = Color.white                               // text and icons on blue
     static let safe = Color(light: 0x15803D, dark: 0x4ADE80)           // "fits you"
     static let warning = Color(light: 0xC62828, dark: 0xF87171)        // over-limit numbers and errors
 
     // brand: follows the active style (see Style.swift)
     static var brand: Color { StyleStore.shared.current.accent }
+    static let brandSoft = Color(light: 0xDCE6FF, dark: 0x1E2A4A)    // light blue: selected rows
     static var brandBright: Color { StyleStore.shared.current.accent }  // kept for older call sites
     static let coral = Color(hex: 0xFF6B4A)                     // the dot in the wordmark, small accents
     static let sun = Color(hex: 0xF5A524)
@@ -204,5 +205,98 @@ struct PresetIcon: View {
                 .frame(width: size, height: size)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+// MARK: - Brutal: thick ink outlines, hard offset shadows, square corners
+
+extension Color {
+    /// outline and hard-shadow ink; flips to off-white in dark mode so edges stay visible
+    static let line = Color(light: 0x111111, dark: 0xF2F0EB)
+}
+
+struct Brutal: ViewModifier {
+    var fill: Color = .paper
+    var shadow: CGFloat = 4
+    var border: CGFloat = 2
+
+    func body(content: Content) -> some View {
+        content
+            .background(fill, ignoresSafeAreaEdges: [])
+            .overlay(Rectangle().stroke(Color.line, lineWidth: border))
+            .background(Rectangle().fill(Color.line).offset(x: shadow, y: shadow))
+    }
+}
+
+extension View {
+    func brutal(fill: Color = .paper, shadow: CGFloat = 4, border: CGFloat = 2) -> some View {
+        modifier(Brutal(fill: fill, shadow: shadow, border: border))
+    }
+}
+
+/// Buttons that drop into their shadow when pressed.
+struct BrutalButtonStyle: ButtonStyle {
+    var fill: Color = .paper
+    var shadow: CGFloat = 4
+
+    func makeBody(configuration: Configuration) -> some View {
+        let pressed = configuration.isPressed
+        configuration.label
+            .background(fill, ignoresSafeAreaEdges: [])
+            .overlay(Rectangle().stroke(Color.line, lineWidth: 2))
+            .background(Rectangle().fill(Color.line)
+                .offset(x: pressed ? 0 : shadow, y: pressed ? 0 : shadow))
+            .offset(x: pressed ? shadow : 0, y: pressed ? shadow : 0)
+            .animation(.snappy(duration: 0.12), value: pressed)
+    }
+}
+
+/// Big uppercase label text with a little tracking, like the button and chip labels.
+extension Text {
+    func shout(_ style: Font.TextStyle = .subheadline) -> some View {
+        self.font(.even(style, .bold)).tracking(1.2).textCase(.uppercase)
+    }
+}
+
+/// Outlined display type: the word drawn as an ink outline on paper.
+struct OutlineText: View {
+    let text: String
+    let font: Font
+    var tracking: CGFloat = 0
+    var stroke: Color = .line
+    var fill: Color = .paper
+    var width: CGFloat = 1.6
+
+    var body: some View {
+        ZStack {
+            ForEach(0..<8, id: \.self) { i in
+                let a = Double(i) * .pi / 4
+                Text(text).font(font).tracking(tracking)
+                    .foregroundStyle(stroke)
+                    .offset(x: cos(a) * width, y: sin(a) * width)
+            }
+            Text(text).font(font).tracking(tracking).foregroundStyle(fill)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+    }
+}
+
+/// Faint graph-paper background.
+struct GridPaper: View {
+    var spacing: CGFloat = 28
+
+    var body: some View {
+        Canvas { ctx, size in
+            var p = Path()
+            var x: CGFloat = 0
+            while x <= size.width { p.move(to: .init(x: x, y: 0)); p.addLine(to: .init(x: x, y: size.height)); x += spacing }
+            var y: CGFloat = 0
+            while y <= size.height { p.move(to: .init(x: 0, y: y)); p.addLine(to: .init(x: size.width, y: y)); y += spacing }
+            ctx.stroke(p, with: .color(Color.hairline.opacity(0.7)), lineWidth: 0.6)
+        }
+        .background(Color.paper)
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }

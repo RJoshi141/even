@@ -1,20 +1,7 @@
 import SwiftUI
 
-// the start screens sit on brand blue; everything on them is white or paper
-private extension Color {
-    static let obBlue = Color(hex: 0x1D4ED8)
-    static let obText = Color.white
-    static let obSoft = Color.white.opacity(0.75)
-    static let obFaint = Color.white.opacity(0.12)
-    static let obLine = Color.white.opacity(0.24)
-    static let obInk = Color(hex: 0x111111)
-    // the illustration cards stay light paper, whatever the system appearance
-    static let cardPaper = Color(hex: 0xFBFAF7)
-    static let cardDeep = Color(hex: 0xF1EEE7)
-    static let cardLine = Color(hex: 0xDDD9CF)
-}
-
 /// First launch, three questions: what Even is, how you get around, where you start.
+/// Neo-brutalist: grid paper, ink outlines, hard shadows, blue as the loud color.
 struct OnboardingView: View {
     let onFinish: (Preset) -> Void
 
@@ -42,10 +29,8 @@ struct OnboardingView: View {
 
             bottomBar
         }
-        .padding(.horizontal, 24)
-        .foregroundStyle(Color.obText)
-        .background(Color.obBlue.ignoresSafeArea())
-        .preferredColorScheme(.dark) // white status bar on the blue
+        .padding(.horizontal, 22)
+        .background(GridPaper())
     }
 
     // pages slide the way you're going; Reduce Motion gets a plain fade
@@ -57,93 +42,93 @@ struct OnboardingView: View {
     }
 
     private func go(_ next: Page) {
-        // set the direction first so the outgoing page leaves the right way
-        forward = next.rawValue > page.rawValue
+        forward = next.rawValue > page.rawValue // set first so the old page leaves the right way
         DispatchQueue.main.async {
             withAnimation(.smooth(duration: 0.45)) { page = next }
         }
     }
 
-    // MARK: top: wordmark or back, plus progress
+    // MARK: top
 
     private var topBar: some View {
         HStack {
             if page == .welcome {
-                Wordmark(size: 22, dot: Color(hex: 0x93C5FD))
+                Wordmark(size: 24)
             } else {
                 Button {
                     go(Page(rawValue: page.rawValue - 1) ?? .welcome)
                 } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.obText)
-                        .frame(width: 44, height: 44, alignment: .leading)
+                    Image(systemName: "arrow.left")
+                        .font(.system(size: 15, weight: .heavy))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 38, height: 38)
                 }
+                .buttonStyle(BrutalButtonStyle(fill: .paper, shadow: 3))
                 .accessibilityLabel("Back")
             }
             Spacer()
             HStack(spacing: 6) {
                 ForEach(Page.allCases, id: \.self) { p in
-                    Capsule()
-                        .fill(p.rawValue <= page.rawValue ? Color.obText : Color.obLine)
-                        .frame(width: p == page ? 22 : 8, height: 8)
+                    Rectangle()
+                        .fill(p == page ? Color.brand : (p.rawValue < page.rawValue ? Color.line : Color.paper))
+                        .frame(width: p == page ? 26 : 12, height: 12)
+                        .overlay(Rectangle().stroke(Color.line, lineWidth: 2))
                 }
             }
             .animation(.smooth(duration: 0.35), value: page)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Step \(page.rawValue + 1) of \(Page.allCases.count)")
         }
-        .frame(height: 52)
+        .frame(height: 56)
     }
 
     // MARK: bottom: the main action always sits here
 
     private var bottomBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 14) {
             switch page {
             case .welcome:
                 primary("Get started") { go(.profile) }
             case .profile:
                 primary("Continue") { go(.location) }
             case .location:
-                primary(askingLocation ? "Asking for permission…" : "Use my location",
-                        icon: "location.fill") { askForLocation() }
+                primary(askingLocation ? "Asking…" : "Use my location", icon: "location.fill") { askForLocation() }
                     .disabled(askingLocation)
-                Button("Not now") {
+                Button {
                     useLocation = false
                     onFinish(choice)
+                } label: {
+                    Text("Not now").shout(.subheadline)
+                        .foregroundStyle(Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .font(.even(.subheadline, .medium))
-                .foregroundStyle(Color.obSoft)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .buttonStyle(BrutalButtonStyle(fill: .paper))
             }
         }
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.top, 14)
+        .padding(.trailing, 4) // room for the hard shadow
+        .padding(.bottom, 12)
         .animation(.smooth(duration: 0.3), value: page)
     }
 
     private func primary(_ title: String, icon: String = "arrow.right", action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(title)
-                    .font(.even(.headline))
-                    .contentTransition(.opacity)
+                Text(title).shout(.headline)
                 Spacer()
-                Image(systemName: icon).font(.system(size: 16, weight: .semibold))
+                Image(systemName: icon).font(.system(size: 16, weight: .heavy))
             }
-            .foregroundStyle(Color.obBlue)
+            .foregroundStyle(Color.onBrand)
             .padding(.horizontal, 20)
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(Color.white, in: .rect(cornerRadius: StyleStore.shared.current.corner + 4))
+            .frame(maxWidth: .infinity, minHeight: 58)
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(BrutalButtonStyle(fill: .brand, shadow: 5))
     }
 
     private func askForLocation() {
         askingLocation = true
         Task {
-            // only asks here, after the person chose it; if they decline we just carry on
+            // only asks now, after the person chose it; if they decline we just carry on
             let ok = (try? await LocationProvider.current(timeout: .seconds(10))) != nil
             useLocation = ok
             askingLocation = false
@@ -157,27 +142,73 @@ struct OnboardingView: View {
 private struct WelcomePage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            RouteIllustration()
-                .frame(height: 300)
-                .padding(.top, 12)
-                .reveal(0.05)
+            VStack(alignment: .leading, spacing: -4) {
+                OutlineText(text: "DIRECTIONS", font: .evenFixed(46, .bold), tracking: -1.5)
+                OutlineText(text: "THAT KNOW", font: .evenFixed(46, .bold), tracking: -1.5)
+                Text("THE HILLS.")
+                    .font(.evenFixed(46, .bold))
+                    .tracking(-1.5)
+                    .foregroundStyle(Color.brand)
+            }
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
+            .padding(.top, 10)
+            .reveal(0.05)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Directions that know the hills.")
+            .accessibilityAddTraits(.isHeader)
 
-            Spacer(minLength: 28)
-
-            Text("Directions that know the hills.")
-                .font(.even(.largeTitle, .bold))
-                .tracking(-1)
-                .fixedSize(horizontal: false, vertical: true)
-                .reveal(0.2)
             Text("Step-free routes around steep blocks, missing curb ramps and stairs, planned for how you get around.")
                 .font(.even(.body))
-                .foregroundStyle(Color.obSoft)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
-                .reveal(0.3)
+                .padding(.top, 14)
+                .reveal(0.15)
 
-            Spacer(minLength: 12)
+            // the map card with a tilted stat card over its corner
+            ZStack(alignment: .topTrailing) {
+                RouteIllustration()
+                    .frame(height: 190)
+                    .brutal()
+                    .rotationEffect(.degrees(-1.5))
+                    .padding(.top, 26)
+                    .padding(.trailing, 40)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Every block").shout(.caption2)
+                    Text("CHECKED").font(.evenFixed(28, .bold)).tracking(-0.5)
+                    Text("for slope and curbs").font(.even(.caption))
+                }
+                .foregroundStyle(Color.onBrand)
+                .padding(12)
+                .brutal(fill: .brand, shadow: 4)
+                .rotationEffect(.degrees(4))
+            }
+            .padding(.top, 22)
+            .reveal(0.25)
+
+            // what Even watches for, as tilted chips
+            HStack(spacing: 10) {
+                chip("arrow.up.right", "Steep hills", -2)
+                chip("figure.roll", "Curb ramps", 1.5)
+                chip("stairs", "Stairs", -1)
+            }
+            .padding(.top, 24)
+            .reveal(0.35)
+
+            Spacer(minLength: 8)
         }
+    }
+
+    private func chip(_ icon: String, _ text: String, _ tilt: Double) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.brand)
+            Text(text).shout(.caption2)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .brutal(shadow: 2)
+        .rotationEffect(.degrees(tilt))
     }
 }
 
@@ -188,27 +219,37 @@ private struct ProfilePage: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("How do you get around?")
-                .font(.even(.largeTitle, .bold))
-                .tracking(-1)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 8)
-                .reveal(0)
-            Text("Even shapes every route around this. You can change it anytime.")
+            VStack(alignment: .leading, spacing: -4) {
+                OutlineText(text: "HOW DO YOU", font: .evenFixed(40, .bold), tracking: -1.2)
+                Text("GET AROUND?")
+                    .font(.evenFixed(40, .bold))
+                    .tracking(-1.2)
+                    .foregroundStyle(Color.brand)
+            }
+            .minimumScaleFactor(0.7)
+            .lineLimit(1)
+            .padding(.top, 6)
+            .reveal(0)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("How do you get around?")
+            .accessibilityAddTraits(.isHeader)
+
+            Text("Even shapes every route around this. Change it anytime.")
                 .font(.even(.body))
-                .foregroundStyle(Color.obSoft)
+                .foregroundStyle(.secondary)
                 .padding(.top, 10)
                 .reveal(0.08)
 
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 ForEach(Array(Preset.allCases.enumerated()), id: \.element) { i, preset in
                     row(preset).reveal(0.14 + Double(i) * 0.05)
                 }
             }
-            .padding(.top, 24)
+            .padding(.top, 20)
+            .padding(.trailing, 4)
 
             limits
-                .padding(.top, 16)
+                .padding(.top, 22)
                 .reveal(0.4)
 
             Spacer(minLength: 0)
@@ -217,64 +258,57 @@ private struct ProfilePage: View {
 
     private func row(_ preset: Preset) -> some View {
         let isOn = choice == preset
-        let corner = StyleStore.shared.current.corner
         return Button {
-            withAnimation(.smooth(duration: 0.25)) { choice = preset }
+            withAnimation(.smooth(duration: 0.2)) { choice = preset }
         } label: {
-            HStack(spacing: 14) {
-                PresetIcon(preset: preset, size: 24)
-                    .foregroundStyle(Color.white)
-                    .frame(width: 44, height: 44)
-                    .background(isOn ? Color.obBlue : Color.obFaint, in: .rect(cornerRadius: corner))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(preset.label).font(.even(.headline))
-                    Text(preset.blurb)
-                        .font(.even(.subheadline))
-                        .opacity(0.7)
+            HStack(spacing: 12) {
+                PresetIcon(preset: preset, size: 22)
+                    .foregroundStyle(isOn ? Color.brand : Color.primary)
+                    .frame(width: 40, height: 40)
+                    .background(isOn ? Color.white : Color.paper)
+                    .overlay(Rectangle().stroke(Color.line, lineWidth: 2))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(preset.label).shout(.subheadline)
+                    Text(preset.blurb).font(.even(.footnote)).opacity(0.8)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
-                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundStyle(isOn ? Color.obBlue : Color.obLine)
             }
-            .foregroundStyle(isOn ? Color.obInk : Color.obText)
-            .padding(12)
-            .background(isOn ? Color.white : Color.white.opacity(0.06), in: .rect(cornerRadius: corner + 4))
-            .overlay(RoundedRectangle(cornerRadius: corner + 4).stroke(isOn ? Color.clear : Color.obLine, lineWidth: 1))
+            .foregroundStyle(Color.primary)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(BrutalButtonStyle(fill: isOn ? .brandSoft : .paper, shadow: isOn ? 4 : 3))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(preset.label). \(preset.limits)")
         .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
     }
 
-    // what the choice means, as numbers that update when you tap
+    // what the choice means, as a tilted card that updates when you tap
     private var limits: some View {
         let l = choice.numbers
-        return VStack(alignment: .leading, spacing: 10) {
-            OnBlueLabel(text: "What this means")
-            HStack(spacing: 8) {
-                fact("↑ \(l.up)%", "Max uphill")
-                fact("↓ \(l.down)%", "Max downhill")
-                fact(l.ramps ? "Ramps" : "Any curb", l.ramps ? "No steps" : "Avoids steps")
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("What this means: \(choice.limits)")
-    }
-
-    private func fact(_ value: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(value)
-                .font(.even(.title3, .bold))
+        return HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Your limits").shout(.caption2)
+                HStack(spacing: 14) {
+                    Text("↑\(l.up)%").contentTransition(.numericText())
+                    Text("↓\(l.down)%").contentTransition(.numericText())
+                }
+                .font(.evenFixed(30, .bold))
                 .monospacedDigit()
-                .contentTransition(.numericText())
-            OnBlueLabel(text: label)
+            }
+            Spacer(minLength: 0)
+            Text(l.ramps ? "No steps\nRamps at every curb" : "No steps\nAny curb")
+                .shout(.caption2)
+                .multilineTextAlignment(.trailing)
         }
-        .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
-        .padding(12)
-        .background(Color.obFaint, in: .rect(cornerRadius: StyleStore.shared.current.corner))
+        .foregroundStyle(Color.onBrand)
+        .padding(14)
+        .brutal(fill: .brand, shadow: 4)
+        .rotationEffect(.degrees(-1.5))
+        .padding(.horizontal, 4)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Your limits: \(choice.limits)")
     }
 }
 
@@ -295,26 +329,37 @@ private extension Preset {
 private struct LocationPage: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            LocationIllustration()
-                .frame(height: 260)
-                .padding(.top, 12)
-                .reveal(0.05)
+            VStack(alignment: .leading, spacing: -4) {
+                OutlineText(text: "START FROM", font: .evenFixed(40, .bold), tracking: -1.2)
+                Text("WHERE YOU ARE?")
+                    .font(.evenFixed(40, .bold))
+                    .tracking(-1.2)
+                    .foregroundStyle(Color.brand)
+            }
+            .minimumScaleFactor(0.6)
+            .lineLimit(1)
+            .padding(.top, 6)
+            .reveal(0)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Start from where you are?")
+            .accessibilityAddTraits(.isHeader)
 
-            Spacer(minLength: 28)
-
-            Text("Start from where you are?")
-                .font(.even(.largeTitle, .bold))
-                .tracking(-1)
-                .fixedSize(horizontal: false, vertical: true)
-                .reveal(0.15)
             Text("Even can use your location as point A, so you only choose where you're going. It's used to plan your route, only while the app is open.")
                 .font(.even(.body))
-                .foregroundStyle(Color.obSoft)
+                .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
-                .reveal(0.25)
+                .reveal(0.1)
 
-            Spacer(minLength: 12)
+            LocationIllustration()
+                .frame(height: 230)
+                .brutal()
+                .rotationEffect(.degrees(1.5))
+                .padding(.top, 30)
+                .padding(.trailing, 4)
+                .reveal(0.2)
+
+            Spacer(minLength: 8)
         }
     }
 }
@@ -333,47 +378,42 @@ private struct RouteIllustration: View {
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
-            let a = CGPoint(x: w * 0.18, y: h * 0.76)
-            let b = CGPoint(x: w * 0.82, y: h * 0.24)
+            let a = CGPoint(x: w * 0.16, y: h * 0.76)
+            let b = CGPoint(x: w * 0.84, y: h * 0.24)
             let around = Path { p in
                 p.move(to: a)
-                p.addLine(to: CGPoint(x: w * 0.82, y: h * 0.76))
+                p.addLine(to: CGPoint(x: w * 0.84, y: h * 0.76))
                 p.addLine(to: b)
             }
 
             ZStack {
                 MapGrid()
 
-                // the hill
                 Ellipse()
-                    .fill(Color.slopeModerate.opacity(0.2))
-                    .frame(width: w * 0.44, height: h * 0.48)
+                    .fill(Color.slopeModerate.opacity(0.25))
+                    .frame(width: w * 0.42, height: h * 0.5)
                     .position(x: w * 0.5, y: h * 0.47)
                 Image(systemName: "mountain.2.fill")
                     .font(.system(size: 22))
                     .foregroundStyle(Color.slopeModerate)
                     .position(x: w * 0.5, y: h * 0.47)
 
-                // the shortcut: straight over the hill, ruled out
                 Path { p in p.move(to: a); p.addLine(to: b) }
-                    .stroke(Color.obInk.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 9]))
+                    .stroke(Color.ink.opacity(0.55), style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [2, 9]))
                     .opacity(shortcut ? 1 : 0)
 
-                // the Even route: around it
                 around
                     .trim(from: 0, to: progress)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: style.routeWidth + 5, lineCap: .round, lineJoin: .round))
+                    .stroke(Color.ink, style: StrokeStyle(lineWidth: style.routeWidth + 5, lineCap: .round, lineJoin: .round))
                 around
                     .trim(from: 0, to: progress)
                     .stroke(Color.slopeEasy, style: StrokeStyle(lineWidth: style.routeWidth, lineCap: .round, lineJoin: .round))
 
-                LetterPin(letter: "A", filled: false, size: 34)
-                    .scaleEffect(pins ? 1 : 0.4)
-                    .opacity(pins ? 1 : 0)
+                LetterPin(letter: "A", filled: false, size: 30)
+                    .scaleEffect(pins ? 1 : 0.4).opacity(pins ? 1 : 0)
                     .position(a)
-                LetterPin(letter: "B", size: 34)
-                    .scaleEffect(pins ? 1 : 0.4)
-                    .opacity(pins ? 1 : 0)
+                LetterPin(letter: "B", size: 30)
+                    .scaleEffect(pins ? 1 : 0.4).opacity(pins ? 1 : 0)
                     .position(b)
             }
         }
@@ -382,15 +422,15 @@ private struct RouteIllustration: View {
                 shortcut = true; progress = 1; pins = true
                 return
             }
-            withAnimation(.spring(duration: 0.5, bounce: 0.3).delay(0.15)) { pins = true }
-            withAnimation(.easeOut(duration: 0.4).delay(0.45)) { shortcut = true }
-            withAnimation(.easeInOut(duration: 1.4).delay(0.85)) { progress = 1 }
+            withAnimation(.spring(duration: 0.5, bounce: 0.3).delay(0.2)) { pins = true }
+            withAnimation(.easeOut(duration: 0.4).delay(0.5)) { shortcut = true }
+            withAnimation(.easeInOut(duration: 1.4).delay(0.9)) { progress = 1 }
         }
         .accessibilityHidden(true)
     }
 }
 
-/// Point A with a gentle pulse, on the same map card.
+/// Point A with a pulse, on the map card.
 private struct LocationIllustration: View {
     @State private var pulse = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -399,14 +439,11 @@ private struct LocationIllustration: View {
         ZStack {
             MapGrid()
             Circle()
-                .fill(Color.obBlue.opacity(0.18))
-                .frame(width: 150, height: 150)
-                .scaleEffect(pulse ? 1 : 0.5)
+                .stroke(Color.brand, lineWidth: 3)
+                .frame(width: 140, height: 140)
+                .scaleEffect(pulse ? 1 : 0.4)
                 .opacity(pulse ? 0 : 1)
-            Circle()
-                .fill(Color.obBlue.opacity(0.18))
-                .frame(width: 70, height: 70)
-            LetterPin(letter: "A", filled: false, size: 40)
+            LetterPin(letter: "A", filled: false, size: 44)
         }
         .onAppear {
             guard !reduceMotion else { return }
@@ -416,15 +453,14 @@ private struct LocationIllustration: View {
     }
 }
 
-/// The paper map card both illustrations sit on.
+/// A tiny street grid inside the bordered cards.
 private struct MapGrid: View {
     var body: some View {
-        let corner = StyleStore.shared.current.corner + 8
         GeometryReader { geo in
             let w = geo.size.width
             let h = geo.size.height
             ZStack {
-                RoundedRectangle(cornerRadius: corner).fill(Color.cardDeep)
+                Rectangle().fill(Color.paperDeep)
                 Path { p in
                     for i in 1..<5 {
                         let x = w * CGFloat(i) / 5
@@ -437,11 +473,9 @@ private struct MapGrid: View {
                         p.addLine(to: CGPoint(x: w, y: y))
                     }
                 }
-                .stroke(Color.cardPaper, lineWidth: 8)
-                RoundedRectangle(cornerRadius: corner).stroke(Color.cardLine, lineWidth: 1)
+                .stroke(Color.paper, lineWidth: 8)
             }
-            .clipShape(.rect(cornerRadius: corner))
-            .shadow(color: .black.opacity(0.18), radius: 18, y: 8)
+            .clipped()
         }
     }
 }
@@ -457,10 +491,10 @@ struct Wordmark: View {
             Text("even")
                 .font(.evenFixed(size, .bold))
                 .tracking(-size * 0.04)
-            Circle()
+            Rectangle()
                 .fill(dot)
-                .frame(width: size * 0.22, height: size * 0.22)
-                .padding(.bottom, size * 0.16)
+                .frame(width: size * 0.24, height: size * 0.24)
+                .padding(.bottom, size * 0.14)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Even")
@@ -486,14 +520,4 @@ private struct Reveal: ViewModifier {
 
 private extension View {
     func reveal(_ delay: Double) -> some View { modifier(Reveal(delay: delay)) }
-}
-
-private struct OnBlueLabel: View {
-    let text: String
-    var body: some View {
-        Text(text.uppercased())
-            .font(.even(.caption2, .semibold))
-            .tracking(0.6)
-            .foregroundStyle(Color.white.opacity(0.7))
-    }
 }

@@ -62,7 +62,7 @@ struct RouteMapView: View {
             let pieces = drawn(route)
             ForEach(pieces) { piece in
                 MapPolyline(coordinates: piece.coords)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: style.routeWidth + 5, lineCap: .round, lineJoin: .round))
+                    .stroke(Color.ink, style: StrokeStyle(lineWidth: style.routeWidth + 5, lineCap: .round, lineJoin: .round))
                     .mapOverlayLevel(level: .aboveLabels)
             }
             ForEach(pieces) { piece in
@@ -171,17 +171,18 @@ struct RouteMapView: View {
 
 struct LetterPin: View {
     let letter: String
-    var filled = true      // B is solid ink, A is paper with an ink ring
+    var filled = true      // B is solid blue, A is paper
     var size: CGFloat = 30
 
     var body: some View {
+        let big = size > 24
         Text(letter)
-            .font(.evenFixed(size * 0.46, .bold))
+            .font(.evenFixed(size * 0.48, .bold))
             .foregroundStyle(filled ? Color.onBrand : Color.ink)
             .frame(width: size, height: size)
             .background(filled ? Color.brand : Color.white, in: Circle())
-            .overlay(Circle().stroke(filled ? Color.paper : Color.ink, lineWidth: size > 24 ? 2.5 : 1.5))
-            .shadow(color: .black.opacity(size > 24 ? 0.25 : 0), radius: 3, y: 1)
+            .overlay(Circle().stroke(Color.ink, lineWidth: big ? 2.5 : 1.5))
+            .background(Circle().fill(Color.ink).offset(x: big ? 3 : 0, y: big ? 3 : 0))
     }
 }
 
@@ -194,8 +195,8 @@ struct CurbMarker: View {
             .font(.evenFixed(9, .black))
             .foregroundStyle(kind == .poorRamp ? Color.ink : Color.white)
             .frame(width: 18, height: 18)
-            .background(fill, in: Circle())
-            .overlay(Circle().stroke(.white, lineWidth: 2))
+            .background(fill)
+            .overlay(Rectangle().stroke(Color.ink, lineWidth: 1.5))
     }
 
     var symbol: String {
@@ -221,9 +222,9 @@ private struct GapPin: View {
             .font(.evenFixed(13, .bold))
             .foregroundStyle(Color.ink)
             .frame(width: 30, height: 30)
-            .background(Color.sun, in: Circle())
-            .overlay(Circle().stroke(.white, lineWidth: 3))
-            .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+            .background(Color.sun)
+            .overlay(Rectangle().stroke(Color.ink, lineWidth: 2.5))
+            .background(Rectangle().fill(Color.ink).offset(x: 3, y: 3))
     }
 }
 

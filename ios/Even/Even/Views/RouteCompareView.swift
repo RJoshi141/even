@@ -30,7 +30,6 @@ struct RouteCompareView: View {
                 if field == .origin { model.origin = place } else { model.destination = place }
             }
         }
-        .animation(.snappy, value: model.tapped)
         .animation(.snappy, value: model.showLegend)
         // the active style's type and icon treatment, applied to everything below
         .symbolVariant(style.filledIcons ? .fill : .none)
@@ -45,7 +44,7 @@ struct RouteCompareView: View {
             VStack(spacing: 0) {
                 placeRow(letter: "A", filled: false, place: model.origin) { editing = .origin }
                     .accessibilityLabel("From \(model.origin.name)")
-                Divider().padding(.leading, 40)
+                Rectangle().fill(Color.line).frame(height: 1.5).padding(.leading, 40)
                 placeRow(letter: "B", filled: true, place: model.destination) { editing = .destination }
                     .accessibilityLabel("To \(model.destination.name)")
             }
@@ -55,17 +54,16 @@ struct RouteCompareView: View {
                 swaps += 1
             } label: {
                 Image(systemName: style.icons.swap)
-                    .font(.even(.subheadline, .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.primary)
                     .symbolEffect(.bounce, value: swaps)
                     .frame(width: 44, height: 80)
             }
             .accessibilityLabel("Swap start and destination")
         }
-        .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
-        .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
-        .padding(.horizontal, 12)
+        .brutal()
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
     }
 
     private func placeRow(letter: String, filled: Bool, place: Place, action: @escaping () -> Void) -> some View {
@@ -131,17 +129,14 @@ struct RouteCompareView: View {
                     }
                 }
                 .padding(4)
-                .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
-                .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
-                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+                .brutal()
 
                 if model.slopeLayerOn, model.network?.tooLarge == true {
                     Text("Zoom in")
                         .font(.even(.caption2, .semibold))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color.paper, in: Capsule())
-                        .overlay(Capsule().stroke(Color.hairline, lineWidth: 1))
+                        .brutal(shadow: 2)
                 }
             }
         }
@@ -178,18 +173,13 @@ struct RouteCompareView: View {
                         onClose: { model.closeInspect() },
                         originName: model.origin.name,
                         destinationName: model.destination.name)
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 6)
+                // floats over the map like the trip card
+                .padding(14)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background {
-                    UnevenRoundedRectangle(topLeadingRadius: style.sheetCorner, topTrailingRadius: style.sheetCorner)
-                        .fill(Color.paper)
-                        .overlay(alignment: .top) { Rectangle().fill(Color.hairline).frame(height: 1) }
-                        .shadow(color: .black.opacity(0.06), radius: 10, y: -2)
-                        .ignoresSafeArea(edges: .bottom)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .brutal()
+                .padding(.leading, 12)
+                .padding(.trailing, 16)
+                .transition(.identity)   // appears instantly, no slide
         } else {
             // routes: cards floating over the map, the map stays full screen
             Group {
@@ -255,9 +245,7 @@ struct RouteCompareView: View {
     private func floating<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         content()
             .padding(14)
-            .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
-            .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
-            .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
+            .brutal()
             .padding(.horizontal, 12)
     }
 }

@@ -10,52 +10,64 @@ struct TripCard: View {
 
     var body: some View {
         let s = route.summary
-        let style = StyleStore.shared.current
-        VStack(alignment: .leading, spacing: 10) {
-            // one line: verdict, time, distance, the two slopes that matter
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if !route.fitsProfile {
-                    Label(verdict(route), systemImage: "exclamationmark.triangle.fill")
-                        .font(.even(.caption, .bold))
-                        .foregroundStyle(Color.warning)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.warning.opacity(0.12), in: Capsule())
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(Format.duration(s.durationS))
+                        .font(.even(.title, .bold))
+                        .tracking(-0.5)
+                    Text(Format.distance(s.distanceM)).shout(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Text(Format.duration(s.durationS)).font(.even(.title3, .bold))
-                Text(Format.distance(s.distanceM)).font(.even(.subheadline)).foregroundStyle(.secondary)
                 Spacer(minLength: 4)
-                Text("↑\(Format.percent(s.maxUphill))  ↓\(Format.percent(s.maxDownhill))")
-                    .font(.even(.caption, .medium))
-                    .foregroundStyle(.secondary)
+                // the two slopes that matter, as bordered chips
+                chip("↑ " + Format.percent(s.maxUphill), bad: s.maxUphill > profile.maxUphill)
+                chip("↓ " + Format.percent(s.maxDownhill), bad: s.maxDownhill > profile.maxDownhill)
             }
-            .monospacedDigit()
-            .lineLimit(1)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(route.fitsProfile ? "" : verdict(route) + ". ")\(Format.duration(s.durationS)), \(Format.distance(s.distanceM)). Steepest uphill \(Format.percent(s.maxUphill)), steepest downhill \(Format.percent(s.maxDownhill))\(route.reachesDestination ? "" : ". Ends short of your destination")")
 
-            HStack(spacing: 8) {
-                Button { onOpen(.info) } label: {
-                    Label("Trip info", systemImage: "info.circle")
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .foregroundStyle(Color.primary)
-                        .overlay(RoundedRectangle(cornerRadius: style.corner).stroke(Color.hairline, lineWidth: 1))
-                }
-                Button { onOpen(.directions) } label: {
-                    Label("Directions", systemImage: "arrow.triangle.turn.up.right.diamond")
-                        .frame(maxWidth: .infinity, minHeight: 38)
-                        .foregroundStyle(Color.onBrand)
-                        .background(Color.brand, in: .rect(cornerRadius: style.corner))
-                }
+            if !route.fitsProfile {
+                Label(verdict(route), systemImage: "exclamationmark.triangle.fill")
+                    .font(.even(.caption, .bold))
+                    .foregroundStyle(Color.warning)
             }
-            .font(.even(.footnote, .semibold))
-            .buttonStyle(PressableStyle())
+
+            HStack(spacing: 12) {
+                Button { onOpen(.info) } label: {
+                    Label { Text("Trip info").shout(.footnote) } icon: {
+                        Image(systemName: "chart.xyaxis.line").font(.system(size: 13, weight: .bold))
+                    }
+                        .foregroundStyle(Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(BrutalButtonStyle(fill: .paper, shadow: 3))
+
+                Button { onOpen(.directions) } label: {
+                    Label { Text("Directions").shout(.footnote) } icon: {
+                        Image(systemName: "arrow.triangle.turn.up.right.diamond.fill").font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundStyle(Color.onBrand)
+                    .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(BrutalButtonStyle(fill: .brand, shadow: 3))
+            }
         }
-        .padding(12)
-        .background(Color.paper, in: .rect(cornerRadius: style.corner + 4))
-        .overlay(RoundedRectangle(cornerRadius: style.corner + 4).stroke(Color.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
-        .padding(.horizontal, 12)
+        .padding(14)
+        .brutal()
+        .padding(.leading, 12)
+        .padding(.trailing, 16)
+    }
+
+    private func chip(_ text: String, bad: Bool) -> some View {
+        Text(text)
+            .font(.even(.footnote, .bold))
+            .monospacedDigit()
+            .foregroundStyle(bad ? Color.onBrand : Color.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(bad ? Color.warning : Color.paper)
+            .overlay(Rectangle().stroke(Color.line, lineWidth: 1.5))
     }
 }
 
@@ -109,7 +121,7 @@ struct TripDetails: View {
             VStack(alignment: .leading, spacing: 8) {
                 SectionLabel(text: "Trip info")
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(Format.duration(s.durationS))
+                    Text(Format.duration(s.durationS).uppercased())
                         .font(.even(.largeTitle, .bold))
                         .tracking(-1)
                     Text(Format.distance(s.distanceM))
@@ -156,7 +168,8 @@ struct TripDetails: View {
                 }
             }
             .padding(14)
-            .background(Color.paperDeep, in: .rect(cornerRadius: corner + 4))
+            .background(Color.paperDeep)
+            .overlay(Rectangle().stroke(Color.line, lineWidth: 2))
 
             // the numbers, big
             HStack(alignment: .top, spacing: 12) {
@@ -179,7 +192,7 @@ struct TripDetails: View {
             // why not the obvious way: a pull quote
             if let line = avoided(route) {
                 HStack(alignment: .top, spacing: 12) {
-                    Rectangle().fill(Color.ink).frame(width: 2)
+                    Rectangle().fill(Color.brand).frame(width: 5)
                     Text(line).font(.even(.subheadline, .medium))
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -213,6 +226,8 @@ struct TripDetails: View {
             SectionLabel(text: label)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .brutal(fill: bad ? Color.warning.opacity(0.12) : .paper, shadow: 3)
         .accessibilityElement(children: .combine)
     }
 
@@ -237,7 +252,8 @@ struct TripDetails: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(color)
                 .frame(width: 26, height: 26)
-                .background(color.opacity(0.14), in: Circle())
+                .background(color.opacity(0.14))
+                .overlay(Rectangle().stroke(Color.line, lineWidth: 1.5))
             Text(text).font(.even(.subheadline))
             Spacer(minLength: 0)
         }
@@ -263,6 +279,7 @@ struct TripDetails: View {
                 Text("\(turns) \(turns == 1 ? "step" : "steps") · \(Format.distance(route.summary.distanceM)) · \(Format.duration(route.summary.durationS))")
                     .font(.even(.title2, .bold))
                     .tracking(-0.5)
+                    .textCase(.uppercase)
                 fromTo
             }
             .padding(.trailing, 40)
@@ -310,9 +327,9 @@ private struct TimelineStep: View {
         .padding(.bottom, isLast ? 0 : 10)
         .overlay(alignment: .topLeading) {
             VStack(spacing: 0) {
-                Rectangle().fill(isFirst ? Color.clear : Color.hairline).frame(width: 2, height: isFirst ? 0 : 10)
+                Rectangle().fill(isFirst ? Color.clear : Color.line).frame(width: 2, height: isFirst ? 0 : 10)
                 node
-                Rectangle().fill(isLast ? Color.clear : Color.hairline).frame(width: 2)
+                Rectangle().fill(isLast ? Color.clear : Color.line).frame(width: 2)
             }
             .frame(width: 32)
         }
@@ -332,7 +349,7 @@ private struct TimelineStep: View {
                 .foregroundStyle(Color.primary)
                 .frame(width: 32, height: 32)
                 .background(Color.paper, in: Circle())
-                .overlay(Circle().stroke(Color.hairline, lineWidth: 1.5))
+                .overlay(Circle().stroke(Color.line, lineWidth: 2))
         }
     }
 
@@ -373,7 +390,7 @@ struct InspectCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.even(.headline))
+                    Text(title).shout(.headline)
                     if loading {
                         Text("Reading this spot…").font(.even(.subheadline)).foregroundStyle(.secondary)
                     } else if let info, info.found {
@@ -390,16 +407,16 @@ struct InspectCard: View {
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.even(.caption, .bold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(Color.paperDeep, in: Circle())
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.primary)
+                        .frame(width: 30, height: 30)
                 }
+                .buttonStyle(BrutalButtonStyle(shadow: 2))
                 .accessibilityLabel("Close")
             }
 
             if !loading, let info, info.found {
-                HStack(spacing: 18) {
+                HStack(spacing: 8) {
                     inline("Incline", Format.percent(info.grade ?? 0))
                     inline("Length", Format.distance(info.lengthM ?? 0))
                     if info.kind == "crossing" {
@@ -423,9 +440,12 @@ struct InspectCard: View {
 
     private func inline(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            SectionLabel(text: label)
-            Text(value).font(.even(.subheadline, .semibold)).monospacedDigit()
+            Text(label).shout(.caption2).foregroundStyle(.secondary)
+            Text(value).font(.even(.subheadline, .bold)).monospacedDigit()
         }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .overlay(Rectangle().stroke(Color.line, lineWidth: 1.5))
         .accessibilityElement(children: .combine)
     }
 
@@ -486,9 +506,7 @@ struct LegendPanel: View {
         }
         .padding(8)
         .frame(width: 250, alignment: .leading)
-        .background(Color.paper, in: .rect(cornerRadius: style.corner))
-        .overlay(RoundedRectangle(cornerRadius: style.corner).stroke(Color.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .brutal()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Map legend")
     }
@@ -564,7 +582,8 @@ struct ProfilePanel: View {
                         }
                     }
                     .padding(8)
-                    .background(isOn ? Color.highlight : .clear, in: .rect(cornerRadius: style.corner))
+                    .background(isOn ? Color.highlight : .clear)
+                    .overlay(Rectangle().stroke(isOn ? Color.line : .clear, lineWidth: 2))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -586,9 +605,7 @@ struct ProfilePanel: View {
         }
         .padding(8)
         .frame(width: 250, alignment: .leading)
-        .background(Color.paper, in: .rect(cornerRadius: style.corner))
-        .overlay(RoundedRectangle(cornerRadius: style.corner).stroke(Color.hairline, lineWidth: 1))
-        .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
+        .brutal()
     }
 }
 
@@ -614,30 +631,24 @@ struct PinActionButton: View {
     let action: () -> Void
 
     var body: some View {
-        let style = StyleStore.shared.current
         Button(action: action) {
             HStack(spacing: 10) {
                 // same badge as the pin it will move on the map
                 LetterPin(letter: letter, filled: !prominent, size: 24)
-                    .overlay(Circle().stroke(prominent ? Color.onBrand : .clear, lineWidth: 1.5))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.even(.subheadline, .bold))
+                    Text(title).shout(.footnote)
                     Text(subtitle)
                         .font(.even(.caption))
                         .lineLimit(1)
-                        .opacity(0.75)
+                        .opacity(0.8)
                 }
                 Spacer(minLength: 0)
             }
             .foregroundStyle(prominent ? Color.onBrand : Color.primary)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, minHeight: 56)
-            .background(prominent ? Color.brand : Color.paper, in: .rect(cornerRadius: style.corner + 2))
-            .overlay(RoundedRectangle(cornerRadius: style.corner + 2)
-                .stroke(prominent ? Color.clear : Color.ink.opacity(0.85), lineWidth: 1.25))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(PressableStyle())
+        .buttonStyle(BrutalButtonStyle(fill: prominent ? .brand : .paper, shadow: 3))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityHint(subtitle)
@@ -678,7 +689,6 @@ struct TripPopup: View {
         .scrollIndicators(.hidden)
         .frame(height: min(contentHeight, maxHeight))
         .overlay(alignment: .bottom) {
-            // a soft fade says "there's more", instead of slicing through a row
             if contentHeight > maxHeight {
                 LinearGradient(colors: [Color.paper.opacity(0), Color.paper], startPoint: .top, endPoint: .bottom)
                     .frame(height: 44)
@@ -686,20 +696,18 @@ struct TripPopup: View {
             }
         }
         .frame(maxWidth: 520)
-        .background(Color.paper, in: .rect(cornerRadius: 24))
         .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.system(size: 13, weight: .heavy))
                     .foregroundStyle(Color.primary)
-                    .frame(width: 32, height: 32)
-                    .background(Color.paperDeep, in: Circle())
+                    .frame(width: 34, height: 34)
             }
+            .buttonStyle(BrutalButtonStyle(fill: .paper, shadow: 2))
             .padding(16)
             .accessibilityLabel("Close")
         }
-        .clipShape(.rect(cornerRadius: 24))
-        .shadow(color: .black.opacity(0.22), radius: 30, y: 14)
+        .brutal(shadow: 7)
         .accessibilityAddTraits(.isModal)
         .accessibilityAction(.escape, onClose)
     }

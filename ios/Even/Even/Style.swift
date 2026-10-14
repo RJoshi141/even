@@ -48,7 +48,7 @@ struct EvenStyle: Identifiable {
         moderate: Color(hex: 0xD98E04),                     // amber
         over: Color(light: 0x1A1A1A, dark: 0xEDEDED),       // ink + white dashes: reads as blocked, never as a button
         mutedMap: true,
-        routeWidth: 7, corner: 8, sheetCorner: 14, pin: .circle, buttonShape: .roundedRectangle(radius: 8),
+        routeWidth: 8, corner: 0, sheetCorner: 0, pin: .circle, buttonShape: .roundedRectangle(radius: 8),
         icons: .init(legend: "list.bullet", layers: "square.3.layers.3d",
                      fit: "viewfinder", swap: "arrow.up.arrow.down"),
         filledIcons: false, hierarchicalIcons: false)
