@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/hero.png" alt="Even on iPhone: tapping a sidewalk, a route to Mission Dolores Park, and turn-by-turn directions">
+  <img src="docs/images/hero-v2.png" alt="Even on iPhone: tapping a sidewalk, a route to Mission Dolores Park, and turn-by-turn directions">
 </p>
 
 Regular map apps send everyone the same way. In San Francisco that can mean a 15% hill, a corner with no curb ramp, or a staircase in the middle of the route. Even plans around how you get around: how steep you can go up, how steep you can go down, and whether you need a ramp at every curb. It then shows you why it picked the route it did.
@@ -21,9 +21,9 @@ Regular map apps send everyone the same way. In San Francisco that can mean a 15
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/images/route.png" alt="Route on the map"></td>
-    <td align="center" width="33%"><img src="docs/images/trip-info.png" alt="Trip info pop-up"></td>
-    <td align="center" width="33%"><img src="docs/images/directions.png" alt="Directions pop-up"></td>
+    <td align="center" width="33%"><img src="docs/images/route-v2.png" alt="Route on the map"></td>
+    <td align="center" width="33%"><img src="docs/images/trip-info-v2.png" alt="Trip info pop-up"></td>
+    <td align="center" width="33%"><img src="docs/images/directions-v2.png" alt="Directions pop-up"></td>
   </tr>
   <tr>
     <td><b>One route, colored by slope.</b> Green is easy, amber is moderate. Square markers flag curb ramps that are steep, worn or unsurveyed.</td>
@@ -31,9 +31,9 @@ Regular map apps send everyone the same way. In San Francisco that can mean a 15
     <td><b>Directions.</b> Each step lists its length, slope and curb status, so nothing is a surprise at the corner.</td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/inspect.png" alt="Inspecting a sidewalk"></td>
-    <td align="center"><img src="docs/images/profiles.png" alt="Mobility profile picker"></td>
-    <td align="center"><img src="docs/images/slope-layer.png" alt="Slope layer over the neighborhood"></td>
+    <td align="center"><img src="docs/images/inspect-v2.png" alt="Inspecting a sidewalk"></td>
+    <td align="center"><img src="docs/images/profiles-v2.png" alt="Mobility profile picker"></td>
+    <td align="center"><img src="docs/images/slope-layer-v2.png" alt="Slope layer over the neighborhood"></td>
   </tr>
   <tr>
     <td><b>Tap any sidewalk.</b> See its incline, length and surface, and whether it works both ways for you. Start or end a route there.</td>
@@ -43,7 +43,7 @@ Regular map apps send everyone the same way. In San Francisco that can mean a 15
 </table>
 
 <p align="center">
-  <img src="docs/images/legend.png" width="300" alt="Map legend">
+  <img src="docs/images/legend-v2.png" width="300" alt="Map legend">
 </p>
 
 ## How it works
